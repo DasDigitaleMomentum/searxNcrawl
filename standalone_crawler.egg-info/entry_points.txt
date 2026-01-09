@@ -1,3 +1,0 @@
-[console_scripts]
-crawl = crawler.cli:main
-crawl-mcp = crawler.mcp_server:main

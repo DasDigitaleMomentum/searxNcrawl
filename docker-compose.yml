@@ -9,7 +9,7 @@ services:
     environment:
       SEARXNG_URL: ${SEARXNG_URL:-http://localhost:8888}
     ports:
-      - "${MCP_PORT:-9555}:8000"
+      - "${MCP_PORT:-9555}:${MCP_PORT:-9555}"
     command:
       [
         "python",

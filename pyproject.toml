@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 crawl = "crawler.cli:main"
+search = "crawler.cli:search_main"
 crawl-mcp = "crawler.mcp_server:main"
 
 [tool.setuptools]

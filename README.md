@@ -1,6 +1,6 @@
 # searxNcrawl
 
-searxNcrawl is a minimal MCP server for crawling and search that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
+searxNcrawl is a minimal MCP server and CLI toolkit for crawling and search that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
 
 This project is published as **searxNcrawl** at https://github.com/DasDigitaleMomentum/searxNcrawl and is maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. It is the successor to `searxng-mcp` https://github.com/tisDDM/searxng-mcp  (which should be marked deprecated).
 
@@ -13,13 +13,18 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **Multiple pages** - Batch crawl a list of URLs with concurrency control
 - **Site crawling** - BFS strategy with max depth and page limits
 - **Clean markdown output** - Optimized for documentation sites
+- **Link removal** - Strip all links from output for cleaner LLM context (`--remove-links`)
 - **Reference extraction** - Captures all links from crawled pages
 
 ### Web Search
 - **SearXNG integration** - Privacy-respecting metasearch engine
 - **Configurable search** - Language, time range, categories, engines
 - **Safe search** - Adjustable content filtering
-- **Round-robin instance selection** - intentionally not implemented (usually unreliable); file a concrete defect report if you want it added
+
+### CLI Tools
+- **`crawl`** - Crawl pages from the command line
+- **`search`** - Search the web via SearXNG
+- **Global installation** - Available system-wide after `pip install -e .`
 
 ### MCP Server
 - **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
@@ -68,7 +73,26 @@ SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 | `SEARXNG_USERNAME` | (none) | Optional basic auth username |
 | `SEARXNG_PASSWORD` | (none) | Optional basic auth password |
 
-Use a local `.env` file for configuration (not committed). Copy `.env.example` and set your own values.
+#### Configuration File Search Order
+
+The CLI tools (`crawl`, `search`) look for `.env` files in this order:
+
+1. **Current directory** - `./.env`
+2. **User config** - `~/.config/searxncrawl/.env`
+
+If no `.env` is found and `.env.example` exists in the package, it will be automatically copied to `~/.config/searxncrawl/.env` as a starting point.
+
+**Quick setup for global CLI usage:**
+
+```bash
+# Option 1: Copy example to user config
+mkdir -p ~/.config/searxncrawl
+cp .env.example ~/.config/searxncrawl/.env
+# Edit with your SEARXNG_URL
+
+# Option 2: Export environment variable
+export SEARXNG_URL=http://your-searxng:8888
+```
 
 ### MCP Harness Configuration
 
@@ -121,6 +145,12 @@ To run real‑world checks against the Docker setup (crawl, crawl_site, search),
 scripts/test-realworld.sh
 ```
 
+For extended tests including new features (remove_links, Unicode handling, schema validation):
+
+```
+scripts/test-extended.sh
+```
+
 ### MCP Tools
 
 #### `crawl`
@@ -133,6 +163,7 @@ Crawl one or more web pages and extract their content as markdown.
 | `urls` | `List[str]` | required | URLs to crawl |
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `concurrency` | `int` | `3` | Max concurrent crawls |
+| `remove_links` | `bool` | `false` | Remove all links from markdown output |
 
 **Output Formats:**
 - `markdown`: Clean concatenated markdown with URL headers and timestamps
@@ -145,6 +176,9 @@ crawl(urls=["https://docs.example.com"])
 
 # Multiple pages with JSON output
 crawl(urls=["https://example.com/page1", "https://example.com/page2"], output_format="json")
+
+# Clean output without links
+crawl(urls=["https://example.com"], remove_links=True)
 ```
 
 #### `crawl_site`
@@ -159,6 +193,7 @@ Crawl an entire website starting from a seed URL using BFS strategy.
 | `max_pages` | `int` | `25` | Maximum pages to crawl |
 | `include_subdomains` | `bool` | `false` | Include subdomains |
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
+| `remove_links` | `bool` | `false` | Remove all links from markdown output |
 
 **Examples:**
 ```
@@ -170,6 +205,9 @@ crawl_site(url="https://docs.example.com", max_depth=3, max_pages=50)
 
 # JSON output with full stats
 crawl_site(url="https://docs.example.com", output_format="json")
+
+# Clean output without links
+crawl_site(url="https://docs.example.com", remove_links=True)
 ```
 
 #### `search`
@@ -345,6 +383,10 @@ for doc in result.documents:
 
 ## CLI Usage
 
+After installation (`pip install -e .`), the `crawl` and `search` commands are available globally.
+
+### crawl
+
 ```bash
 # Single page to stdout
 crawl https://example.com
@@ -361,11 +403,38 @@ crawl https://docs.example.com --site --max-depth 2 --max-pages 10 -o docs/
 # Output as JSON (includes metadata and references)
 crawl https://example.com --json
 
+# Clean output without links (better for LLM context)
+crawl https://example.com --remove-links
+
 # JSON output for site crawl
 crawl https://docs.example.com --site --max-pages 5 --json -o result.json
 
 # Verbose logging
 crawl https://example.com -v
+```
+
+### search
+
+Requires `SEARXNG_URL` environment variable (or `.env` file).
+
+```bash
+# Basic search
+search "python tutorials"
+
+# Search in German
+search "Rezepte" --language de
+
+# Search with time filter
+search "latest AI news" --time-range week
+
+# Limit results
+search "docker compose" --max-results 5
+
+# Save results to file
+search "python asyncio" -o results.json
+
+# Specific categories
+search "cute cats" --categories images
 ```
 
 ## CrawledDocument Structure

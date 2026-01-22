@@ -100,7 +100,17 @@ async def crawl_site_async(
         max_pages=max_pages,
         filter_chain=filter_chain,
     )
-    config.stream = True
+    # NOTE: stream must be False for BFS deep crawl.
+    #
+    # With stream=True, crawl4ai returns an async generator that yields 0 items
+    # despite successful crawls - this is a bug in crawl4ai's BFS implementation.
+    #
+    # With stream=False, crawl4ai waits for all pages to complete and returns
+    # a list of results. Trade-offs:
+    #   - Memory: All results held in RAM (acceptable for max_pages limit)
+    #   - Latency: Response only after last page (acceptable for MCP request/response)
+    #   - Reliability: Works correctly ✓
+    config.stream = False
     config.exclude_external_links = not include_subdomains
 
     documents: List[CrawledDocument] = []
@@ -186,6 +196,17 @@ async def _iterate_results(result):
     import inspect
 
     from crawl4ai.models import CrawlResult, CrawlResultContainer
+
+    # Handle list of results (returned when stream=False)
+    if isinstance(result, list):
+        for item in result:
+            # Each item might be a CrawlResultContainer or CrawlResult
+            if isinstance(item, CrawlResultContainer):
+                for sub_item in item:
+                    yield sub_item
+            else:
+                yield item
+        return
 
     if isinstance(result, CrawlResultContainer):
         for item in result:

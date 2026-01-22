@@ -87,6 +87,21 @@ def _format_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def _strip_markdown_links(text: str) -> str:
+    """Remove markdown links from text, keeping only the link text.
+    
+    Converts [text](url) to text and removes standalone URLs.
+    """
+    import re
+    # Replace [text](url) with just text
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    # Remove standalone URLs (http/https)
+    text = re.sub(r'https?://\S+', '', text)
+    # Clean up any double spaces left behind
+    text = re.sub(r'  +', ' ', text)
+    return text
+
+
 def _doc_to_dict(doc: CrawledDocument) -> dict:
     """Convert CrawledDocument to JSON-serializable dict."""
     return {
@@ -135,12 +150,18 @@ def _format_output(
     docs: List[CrawledDocument],
     output_format: OutputFormat,
     stats: Optional[dict] = None,
+    remove_links: bool = False,
 ) -> str:
     """Format crawl results based on output format."""
     if output_format == OutputFormat.json:
+        doc_dicts = [_doc_to_dict(doc) for doc in docs]
+        if remove_links:
+            for d in doc_dicts:
+                if d.get("markdown"):
+                    d["markdown"] = _strip_markdown_links(d["markdown"])
         result = {
             "crawled_at": _format_timestamp(),
-            "documents": [_doc_to_dict(doc) for doc in docs],
+            "documents": doc_dicts,
             "summary": {
                 "total": len(docs),
                 "successful": sum(1 for d in docs if d.status == "success"),
@@ -149,10 +170,13 @@ def _format_output(
         }
         if stats:
             result["stats"] = stats
-        return json.dumps(result, indent=2)
+        return json.dumps(result, indent=2, ensure_ascii=False)
     else:
         # Markdown format
-        return _format_multiple_docs_markdown(docs)
+        output = _format_multiple_docs_markdown(docs)
+        if remove_links:
+            output = _strip_markdown_links(output)
+        return output
 
 
 # =============================================================================
@@ -165,7 +189,8 @@ async def crawl(
     urls: List[str],
     output_format: str = "markdown",
     concurrency: int = 3,
-) -> str:
+    remove_links: bool = False,
+):
     """
     Crawl one or more web pages and extract their content as markdown.
 
@@ -175,6 +200,7 @@ async def crawl(
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and statistics
         concurrency: Maximum concurrent crawls (default: 3)
+        remove_links: Remove all links from the markdown output (default: false)
 
     Returns:
         Crawled content in the specified format.
@@ -188,6 +214,9 @@ async def crawl(
 
         # With JSON output
         crawl(urls=["https://example.com"], output_format="json")
+
+        # Clean output without links
+        crawl(urls=["https://example.com"], remove_links=True)
     """
     from . import crawl_page_async, crawl_pages_async
 
@@ -219,7 +248,7 @@ async def crawl(
     successful = sum(1 for d in docs if d.status == "success")
     LOGGER.info("Completed: %d/%d successful", successful, len(docs))
 
-    return _format_output(docs, fmt)
+    return _format_output(docs, fmt, remove_links=remove_links)
 
 
 @mcp.tool
@@ -229,7 +258,8 @@ async def crawl_site(
     max_pages: int = 25,
     include_subdomains: bool = False,
     output_format: str = "markdown",
-) -> str:
+    remove_links: bool = False,
+):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
 
@@ -241,6 +271,7 @@ async def crawl_site(
         output_format: Output format - "markdown" (default) or "json"
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and crawl statistics
+        remove_links: Remove all links from the markdown output (default: false)
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -257,6 +288,9 @@ async def crawl_site(
 
         # JSON output with stats
         crawl_site(url="https://docs.example.com", output_format="json")
+
+        # Clean output without links
+        crawl_site(url="https://docs.example.com", remove_links=True)
     """
     from . import crawl_site_async
 
@@ -287,7 +321,7 @@ async def crawl_site(
         result.stats.get("failed_pages", 0),
     )
 
-    return _format_output(result.documents, fmt, stats=result.stats)
+    return _format_output(result.documents, fmt, stats=result.stats, remove_links=remove_links)
 
 
 # =============================================================================
@@ -322,7 +356,7 @@ async def search(
     safesearch: int = 1,
     pageno: int = 1,
     max_results: int = 10,
-) -> str:
+):
     """
     Search the web using SearXNG metasearch engine.
 
@@ -392,7 +426,7 @@ async def search(
 
         LOGGER.info("Search returned %d results", data.get("number_of_results", 0))
 
-        return json.dumps(data, indent=2)
+        return json.dumps(data, indent=2, ensure_ascii=False)
 
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
@@ -404,17 +438,17 @@ async def search(
                 f"SearXNG API error: {exc.response.status_code} - {exc.response.text}"
             )
         LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query})
+        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
     except httpx.RequestError as exc:
         error_msg = f"Request failed: {str(exc)}"
         LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query})
+        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
     except Exception as exc:
         error_msg = f"Unexpected error: {str(exc)}"
         LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query})
+        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
 
 # =============================================================================

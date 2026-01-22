@@ -418,7 +418,7 @@ crawl https://example.com -v
 Requires `SEARXNG_URL` environment variable (or `.env` file).
 
 ```bash
-# Basic search
+# Basic search (markdown output)
 search "python tutorials"
 
 # Search in German
@@ -427,14 +427,14 @@ search "Rezepte" --language de
 # Search with time filter
 search "latest AI news" --time-range week
 
+# JSON output
+search "python" --json
+
+# Save JSON results to file
+search "python asyncio" --json -o results.json
+
 # Limit results
 search "docker compose" --max-results 5
-
-# Save results to file
-search "python asyncio" -o results.json
-
-# Specific categories
-search "cute cats" --categories images
 ```
 
 ## CrawledDocument Structure

@@ -85,6 +85,50 @@ def _strip_markdown_links(text: str) -> str:
     return text
 
 
+def _format_search_markdown(data: Dict[str, Any]) -> str:
+    """Format search results as markdown.
+    
+    Example output:
+    # Search: python tutorials
+    
+    ## 1. Python Tutorial - W3Schools
+    https://www.w3schools.com/python/
+    
+    Well organized tutorials with examples...
+    
+    ---
+    """
+    lines = []
+    query = data.get("query", "")
+    results = data.get("results", [])
+    
+    lines.append(f"# Search: {query}")
+    lines.append(f"_Found {len(results)} results_")
+    lines.append("")
+    
+    for i, result in enumerate(results, 1):
+        title = result.get("title", "Untitled")
+        url = result.get("url", "")
+        content = result.get("content", "")
+        
+        lines.append(f"## {i}. {title}")
+        lines.append(url)
+        lines.append("")
+        if content:
+            lines.append(content)
+            lines.append("")
+        lines.append("---")
+        lines.append("")
+    
+    # Add suggestions if available
+    suggestions = data.get("suggestions", [])
+    if suggestions:
+        lines.append("**Related searches:** " + ", ".join(suggestions[:5]))
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
 def _doc_to_dict(doc: CrawledDocument) -> dict:
     """Convert document to JSON-serializable dict."""
     return {
@@ -361,7 +405,7 @@ def _parse_search_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  # Basic search
+  # Basic search (markdown output)
   search "python tutorials"
 
   # Search with language
@@ -370,11 +414,11 @@ Examples:
   # Search with time filter
   search "latest AI news" --time-range week
 
-  # Limit results
-  search "python" --max-results 5
+  # JSON output
+  search "python" --json
 
   # Output to file
-  search "docker compose" -o results.json
+  search "docker compose" --json -o results.json
 """,
     )
 
@@ -428,6 +472,12 @@ Examples:
         type=str,
         default=None,
         help="Output file for JSON results",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output as JSON instead of markdown",
     )
     parser.add_argument(
         "-v",
@@ -491,16 +541,19 @@ async def _run_search_async(args: argparse.Namespace) -> int:
 
         logging.info("Found %d results", data.get("number_of_results", 0))
 
-        # Output
-        output_json = json.dumps(data, indent=2, ensure_ascii=False)
+        # Format output
+        if args.json_output:
+            output = json.dumps(data, indent=2, ensure_ascii=False)
+        else:
+            output = _format_search_markdown(data)
 
         if args.output:
             path = Path(args.output)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(output_json)
+            path.write_text(output)
             logging.info("Wrote results to %s", path)
         else:
-            print(output_json)
+            print(output)
 
         return 0
 

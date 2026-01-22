@@ -19,7 +19,7 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **SearXNG integration** - Privacy-respecting metasearch engine
 - **Configurable search** - Language, time range, categories, engines
 - **Safe search** - Adjustable content filtering
-- **Round-robin instance selection** - removed from implementation (open an suitable issue or pull request and it can be added)
+- **Round-robin instance selection** - intentionally not implemented (usually unreliable); file a concrete defect report if you want it added
 
 ### MCP Server
 - **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
@@ -68,6 +68,8 @@ SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 | `SEARXNG_USERNAME` | (none) | Optional basic auth username |
 | `SEARXNG_PASSWORD` | (none) | Optional basic auth password |
 
+Use a local `.env` file for configuration (not committed). Copy `.env.example` and set your own values.
+
 ### MCP Harness Configuration
 
 Add to your MCP client configuration (examples include Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.):
@@ -101,6 +103,22 @@ Or with uv:
     }
   }
 }
+```
+
+### Running with Docker Compose
+
+Create a `.env` file (see `.env.example`) and run:
+
+```bash
+docker compose up --build
+```
+
+The MCP HTTP port is configurable via `MCP_PORT` in `.env`. Default is `9555`, so the server is available at `http://localhost:9555/mcp`.
+
+To run real‑world checks against the Docker setup (crawl, crawl_site, search), use:
+
+```
+scripts/test-realworld.sh
 ```
 
 ### MCP Tools

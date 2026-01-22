@@ -34,6 +34,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .document import CrawledDocument
@@ -45,6 +46,9 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 LOGGER = logging.getLogger(__name__)
+
+# Load .env before reading environment variables
+load_dotenv()
 
 # SearXNG configuration from environment
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")

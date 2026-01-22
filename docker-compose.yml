@@ -1,0 +1,24 @@
+services:
+  searxncrawl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: searxncrawl:latest
+    env_file:
+      - .env
+    environment:
+      SEARXNG_URL: ${SEARXNG_URL:-http://localhost:8888}
+    ports:
+      - "${MCP_PORT:-9555}:8000"
+    command:
+      [
+        "python",
+        "-m",
+        "crawler.mcp_server",
+        "--transport",
+        "http",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "${MCP_PORT:-9555}",
+      ]

@@ -17,7 +17,7 @@ Usage:
     fastmcp run crawler/mcp_server.py:mcp --transport http --port 8000
 
 Environment Variables:
-    SEARXNG_URL: SearXNG instance URL (default: http://10.1.1.51:8888)
+    SEARXNG_URL: SearXNG instance URL (default: http://localhost:8888)
     SEARXNG_USERNAME: Optional basic auth username
     SEARXNG_PASSWORD: Optional basic auth password
 """
@@ -47,7 +47,7 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 # SearXNG configuration from environment
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://10.1.1.51:8888")
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
 SEARXNG_USERNAME = os.getenv("SEARXNG_USERNAME")
 SEARXNG_PASSWORD = os.getenv("SEARXNG_PASSWORD")
 
@@ -425,7 +425,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Environment Variables:
-    SEARXNG_URL       SearXNG instance URL (default: http://10.1.1.51:8888)
+    SEARXNG_URL       SearXNG instance URL (default: http://localhost:8888)
     SEARXNG_USERNAME  Optional basic auth username
     SEARXNG_PASSWORD  Optional basic auth password
 

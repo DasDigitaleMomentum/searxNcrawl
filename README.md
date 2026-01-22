@@ -1,6 +1,8 @@
-# Standalone Crawler & Search
+# searxNcrawl
 
-A minimal MCP server providing web crawling and search capabilities. No database, no enrichment, just crawling and searching.
+searxNcrawl is a minimal MCP server for crawling and search that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
+
+This project is published as **searxNcrawl** at https://github.com/DasDigitaleMomentum/searxNcrawl and is maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. It is the successor to `searxng-mcp` https://github.com/tisDDM/searxng-mcp  (which should be marked deprecated).
 
 Extracted from the l4l-crawl project - the core crawl4ai configuration that took forever to get right.
 
@@ -17,15 +19,16 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **SearXNG integration** - Privacy-respecting metasearch engine
 - **Configurable search** - Language, time range, categories, engines
 - **Safe search** - Adjustable content filtering
+- **Round-robin instance selection** - removed from implementation (open an suitable issue or pull request and it can be added)
 
 ### MCP Server
-- **STDIO transport** - For Claude Desktop, Cursor, etc.
+- **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
 - **HTTP transport** - For remote access and web integrations
 
 ## Installation
 
 ```bash
-cd standalone-crawler
+cd searxNcrawl
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
@@ -36,12 +39,12 @@ playwright install chromium
 
 ## MCP Server
 
-The crawler is available as an MCP (Model Context Protocol) server, compatible with Claude Desktop and other MCP clients.
+The crawler is available as an MCP (Model Context Protocol) server, compatible with common MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.).
 
 ### Running the MCP Server
 
 ```bash
-# STDIO transport (for Claude Desktop, Cursor, etc.)
+# STDIO transport (for MCP harnesses such as Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
 python -m crawler.mcp_server
 
 # HTTP transport (for remote access)
@@ -61,13 +64,13 @@ SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SEARXNG_URL` | `http://10.1.1.51:8888` | SearXNG instance URL |
+| `SEARXNG_URL` | `http://localhost:8888` | SearXNG instance URL |
 | `SEARXNG_USERNAME` | (none) | Optional basic auth username |
 | `SEARXNG_PASSWORD` | (none) | Optional basic auth password |
 
-### Claude Desktop Configuration
+### MCP Harness Configuration
 
-Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json` on Linux, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add to your MCP client configuration (examples include Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.):
 
 ```json
 {
@@ -75,7 +78,7 @@ Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json`
     "crawler": {
       "command": "python",
       "args": ["-m", "crawler.mcp_server"],
-      "cwd": "/path/to/standalone-crawler",
+      "cwd": "/path/to/searxNcrawl",
       "env": {
         "SEARXNG_URL": "http://your-searxng-instance:8888"
       }
@@ -91,7 +94,7 @@ Or with uv:
   "mcpServers": {
     "crawler": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/standalone-crawler", "python", "-m", "crawler.mcp_server"],
+      "args": ["run", "--directory", "/path/to/searxNcrawl", "python", "-m", "crawler.mcp_server"],
       "env": {
         "SEARXNG_URL": "http://your-searxng-instance:8888"
       }
@@ -401,4 +404,4 @@ Minimal dependencies:
 
 ## License
 
-MIT
+MIT — © 2026 DDM – Das Digitale Momentum GmbH & Co KG

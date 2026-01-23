@@ -1,6 +1,6 @@
 # searxNcrawl
 
-searxNcrawl is a minimal MCP server and CLI toolkit for crawling and search that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
+searxNcrawl is a minimal MCP server and CLI toolkit for crawling and search with searxng, a privacy-respecting metasearch engine, that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
 
 This project is published as **searxNcrawl** at https://github.com/DasDigitaleMomentum/searxNcrawl and is maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. It is the successor to `searxng-mcp` https://github.com/tisDDM/searxng-mcp  (which should be marked deprecated).
 
@@ -72,6 +72,15 @@ SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 | `SEARXNG_URL` | `http://localhost:8888` | SearXNG instance URL |
 | `SEARXNG_USERNAME` | (none) | Optional basic auth username |
 | `SEARXNG_PASSWORD` | (none) | Optional basic auth password |
+
+#### SearXNG Instance Requirements
+
+[SearXNG](https://github.com/searxng/searxng) is a privacy-respecting metasearch engine that aggregates results from multiple search engines without tracking users. To use the search functionality of searxNcrawl, you need access to a SearXNG instance with:
+
+- **JSON output format enabled** – The instance must have JSON format enabled in its configuration (this is typically set in `settings.yml` under `search.formats`).
+- **Network accessibility** – The instance must be reachable from where you run searxNcrawl.
+
+You can either self-host a SearXNG instance or use a public one. For reliable results, self-hosting is recommended as public instances may have rate limits or restricted API access.
 
 #### Configuration File Search Order
 

@@ -1,3 +1,5 @@
+name: searxncrawl
+
 services:
   searxncrawl:
     build:
@@ -7,7 +9,9 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sS -o /dev/null -w '%{http_code}' http://localhost:${MCP_PORT:-9555}/mcp | grep -qE '^[1-4][0-9]{2}$'" ]
+      test:
+        - CMD-SHELL
+        - "curl -sS -o /dev/null -w '%{http_code}' http://localhost:${MCP_PORT:-9555}/mcp | grep -qE '^[1-4][0-9]{2}$'"
       interval: 30s
       timeout: 10s
       retries: 3
@@ -16,4 +20,13 @@ services:
       SEARXNG_URL: ${SEARXNG_URL:-http://localhost:8888}
     ports:
       - "${MCP_PORT:-9555}:${MCP_PORT:-9555}"
-    command: [ "python", "-m", "crawler.mcp_server", "--transport", "http", "--host", "0.0.0.0", "--port", "${MCP_PORT:-9555}" ]
+    command:
+      - python
+      - -m
+      - crawler.mcp_server
+      - --transport
+      - http
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${MCP_PORT:-9555}"

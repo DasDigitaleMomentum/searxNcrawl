@@ -27,7 +27,7 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **Global installation** - Available system-wide after `pip install -e .`
 
 ### MCP Server
-- **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
+- **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.)
 - **HTTP transport** - For remote access and web integrations
 
 ## Installation
@@ -44,12 +44,12 @@ playwright install chromium
 
 ## MCP Server
 
-The crawler is available as an MCP (Model Context Protocol) server, compatible with common MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.).
+The crawler is available as an MCP (Model Context Protocol) server, compatible with common MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.).
 
 ### Running the MCP Server
 
 ```bash
-# STDIO transport (for MCP harnesses such as Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.)
+# STDIO transport (for MCP harnesses such as Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.)
 python -m crawler.mcp_server
 
 # HTTP transport (for remote access)
@@ -105,7 +105,7 @@ export SEARXNG_URL=http://your-searxng:8888
 
 ### MCP Harness Configuration
 
-Add to your MCP client configuration (examples include Zed, opencode, antigravity, VS Code, Claude Code, Codex, etc.):
+Add to your MCP client configuration (examples include Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.):
 
 ```json
 {

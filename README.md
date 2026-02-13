@@ -138,6 +138,51 @@ Or with uv:
 }
 ```
 
+### OpenClaw Configuration
+
+[OpenClaw](https://openclaw.ai) is a popular autonomous AI agent (150k+ GitHub stars) that supports MCP natively. To integrate searxNcrawl with OpenClaw, add the following to your OpenClaw MCP config file (`~/.clawdbot/mcp.json` or `openclaw.json`):
+
+**Python with venv:**
+
+```json
+{
+  "searxNcrawl": {
+    "command": "python",
+    "args": ["-m", "crawler.mcp_server"],
+    "cwd": "/path/to/searxNcrawl",
+    "env": {
+      "SEARXNG_URL": "http://your-searxng-instance:8888"
+    }
+  }
+}
+```
+
+**With uv (no manual venv needed):**
+
+```json
+{
+  "searxNcrawl": {
+    "command": "uv",
+    "args": ["run", "--directory", "/path/to/searxNcrawl", "python", "-m", "crawler.mcp_server"],
+    "env": {
+      "SEARXNG_URL": "http://your-searxng-instance:8888"
+    }
+  }
+}
+```
+
+**Docker HTTP endpoint:**
+
+If you prefer running searxNcrawl via Docker, start the server with:
+
+```bash
+docker compose up --build
+```
+
+Then configure OpenClaw to connect to the HTTP endpoint at `http://localhost:9555/mcp`.
+
+Once configured, OpenClaw will have access to the `crawl`, `crawl_site`, and `search` tools.
+
 ### Running with Docker Compose
 
 Create a `.env` file (see `.env.example`) and run:

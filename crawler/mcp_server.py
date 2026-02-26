@@ -3,6 +3,7 @@
 Provides tools for:
 - Crawling web pages and extracting markdown content
 - Searching the web via SearXNG metasearch engine
+- Authenticated crawling via cookies, headers, or storage state
 
 Supports both STDIO and HTTP transports.
 
@@ -20,6 +21,9 @@ Environment Variables:
     SEARXNG_URL: SearXNG instance URL (default: http://localhost:8888)
     SEARXNG_USERNAME: Optional basic auth username
     SEARXNG_PASSWORD: Optional basic auth password
+    CRAWL_AUTH_STORAGE_STATE: Path to default Playwright storage state JSON
+    CRAWL_AUTH_COOKIES_FILE: Path to default cookies JSON file
+    CRAWL_AUTH_PROFILE: Path to default persistent browser profile
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ import httpx
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
+from .auth import AuthConfig, list_auth_profiles as _list_auth_profiles, load_auth_from_env
 from .document import CrawledDocument
 
 # Configure logging
@@ -64,9 +69,14 @@ mcp = FastMCP(
     1. Web Crawling Tools:
        - crawl: Crawl one or more URLs and get markdown content
        - crawl_site: Crawl an entire website with depth/page limits
+       Both support authenticated crawling via cookies, headers, or
+       Playwright storage state for pages behind login walls.
 
     2. Web Search Tool:
        - search: Search the web using SearXNG metasearch engine
+
+    3. Auth Management:
+       - list_auth_profiles: List available persistent browser profiles
 
     Output formats for crawl tools:
     - markdown: Clean concatenated markdown (default)
@@ -89,7 +99,7 @@ def _format_timestamp() -> str:
 
 def _strip_markdown_links(text: str) -> str:
     """Remove markdown links from text, keeping only the link text.
-    
+
     Converts [text](url) to text and removes standalone URLs.
     """
     import re
@@ -179,8 +189,25 @@ def _format_output(
         return output
 
 
+def _build_auth_config(
+    cookies: Optional[List[Dict[str, str]]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    storage_state: Optional[str] = None,
+) -> Optional[AuthConfig]:
+    """Build an AuthConfig from MCP tool parameters, falling back to env vars."""
+    # Explicit parameters take precedence
+    if any([cookies, headers, storage_state]):
+        return AuthConfig(
+            cookies=cookies,
+            headers=headers,
+            storage_state=storage_state,
+        )
+    # Fall back to environment variables
+    return load_auth_from_env()
+
+
 # =============================================================================
-# CRAWL TOOLS
+# MCP Tools
 # =============================================================================
 
 
@@ -190,6 +217,9 @@ async def crawl(
     output_format: str = "markdown",
     concurrency: int = 3,
     remove_links: bool = False,
+    cookies: Optional[List[Dict[str, str]]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    storage_state: Optional[str] = None,
 ):
     """
     Crawl one or more web pages and extract their content as markdown.
@@ -201,6 +231,13 @@ async def crawl(
             - json: Full JSON with metadata, references, and statistics
         concurrency: Maximum concurrent crawls (default: 3)
         remove_links: Remove all links from the markdown output (default: false)
+        cookies: Optional list of cookie dicts for authenticated crawling.
+            Each dict should have 'name', 'value', 'domain' keys.
+            Example: [{"name": "session", "value": "abc123", "domain": ".example.com"}]
+        headers: Optional dict of custom HTTP headers.
+            Example: {"Authorization": "Bearer xyz123"}
+        storage_state: Optional path to a Playwright storage state JSON file
+            (exported via capture-auth CLI). Contains cookies and localStorage.
 
     Returns:
         Crawled content in the specified format.
@@ -209,14 +246,23 @@ async def crawl(
         # Single page
         crawl(urls=["https://docs.example.com"])
 
-        # Multiple pages
-        crawl(urls=["https://example.com/page1", "https://example.com/page2"])
+        # Authenticated with cookies
+        crawl(
+            urls=["https://protected.example.com"],
+            cookies=[{"name": "sid", "value": "abc", "domain": ".example.com"}]
+        )
 
-        # With JSON output
-        crawl(urls=["https://example.com"], output_format="json")
+        # Authenticated with storage state
+        crawl(
+            urls=["https://protected.example.com"],
+            storage_state="/path/to/auth_state.json"
+        )
 
-        # Clean output without links
-        crawl(urls=["https://example.com"], remove_links=True)
+        # Authenticated with bearer token
+        crawl(
+            urls=["https://api.example.com"],
+            headers={"Authorization": "Bearer xyz123"}
+        )
     """
     from . import crawl_page_async, crawl_pages_async
 
@@ -226,11 +272,16 @@ async def crawl(
     except ValueError:
         fmt = OutputFormat.markdown
 
+    # Build auth config
+    auth = _build_auth_config(cookies, headers, storage_state)
+    if auth:
+        LOGGER.info("Crawling with authentication enabled")
+
     LOGGER.info("Crawling %d URL(s)...", len(urls))
 
     if len(urls) == 1:
         try:
-            doc = await crawl_page_async(urls[0])
+            doc = await crawl_page_async(urls[0], auth=auth)
             docs = [doc]
         except Exception as exc:
             docs = [
@@ -243,7 +294,7 @@ async def crawl(
                 )
             ]
     else:
-        docs = await crawl_pages_async(urls, concurrency=concurrency)
+        docs = await crawl_pages_async(urls, concurrency=concurrency, auth=auth)
 
     successful = sum(1 for d in docs if d.status == "success")
     LOGGER.info("Completed: %d/%d successful", successful, len(docs))
@@ -259,6 +310,9 @@ async def crawl_site(
     include_subdomains: bool = False,
     output_format: str = "markdown",
     remove_links: bool = False,
+    cookies: Optional[List[Dict[str, str]]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    storage_state: Optional[str] = None,
 ):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
@@ -269,9 +323,11 @@ async def crawl_site(
         max_pages: Maximum number of pages to crawl (default: 25)
         include_subdomains: Whether to include subdomains in the crawl (default: false)
         output_format: Output format - "markdown" (default) or "json"
-            - markdown: Clean concatenated markdown with URL headers and timestamps
-            - json: Full JSON with metadata, references, and crawl statistics
         remove_links: Remove all links from the markdown output (default: false)
+        cookies: Optional list of cookie dicts for authenticated crawling.
+            Each dict should have 'name', 'value', 'domain' keys.
+        headers: Optional dict of custom HTTP headers.
+        storage_state: Optional path to a Playwright storage state JSON file.
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -280,17 +336,13 @@ async def crawl_site(
         # Basic site crawl
         crawl_site(url="https://docs.example.com")
 
-        # Deep crawl with more pages
-        crawl_site(url="https://docs.example.com", max_depth=3, max_pages=50)
-
-        # Include subdomains
-        crawl_site(url="https://example.com", include_subdomains=True)
-
-        # JSON output with stats
-        crawl_site(url="https://docs.example.com", output_format="json")
-
-        # Clean output without links
-        crawl_site(url="https://docs.example.com", remove_links=True)
+        # Authenticated site crawl
+        crawl_site(
+            url="https://internal.example.com",
+            storage_state="/path/to/auth_state.json",
+            max_depth=3,
+            max_pages=50
+        )
     """
     from . import crawl_site_async
 
@@ -299,6 +351,11 @@ async def crawl_site(
         fmt = OutputFormat(output_format.lower())
     except ValueError:
         fmt = OutputFormat.markdown
+
+    # Build auth config
+    auth = _build_auth_config(cookies, headers, storage_state)
+    if auth:
+        LOGGER.info("Site crawl with authentication enabled")
 
     LOGGER.info(
         "Starting site crawl: %s (max_depth=%d, max_pages=%d)",
@@ -312,6 +369,7 @@ async def crawl_site(
         max_depth=max_depth,
         max_pages=max_pages,
         include_subdomains=include_subdomains,
+        auth=auth,
     )
 
     LOGGER.info(
@@ -324,8 +382,29 @@ async def crawl_site(
     return _format_output(result.documents, fmt, stats=result.stats, remove_links=remove_links)
 
 
+@mcp.tool
+async def list_auth_profiles_tool() -> str:
+    """
+    List available auth profiles (persistent browser profiles).
+
+    Returns:
+        JSON string with list of available profiles, each with
+        'name', 'path', and 'modified' timestamp.
+
+    These profiles can be used with the CRAWL_AUTH_PROFILE environment
+    variable or the user_data_dir parameter in the Python API.
+    """
+    profiles = _list_auth_profiles()
+    if not profiles:
+        return json.dumps(
+            {"profiles": [], "message": "No auth profiles found in ~/.crawl4ai/profiles/"},
+            indent=2,
+        )
+    return json.dumps({"profiles": profiles}, indent=2, ensure_ascii=False)
+
+
 # =============================================================================
-# SEARXNG SEARCH TOOL
+# SearXNG Search
 # =============================================================================
 
 
@@ -452,7 +531,7 @@ async def search(
 
 
 # =============================================================================
-# CLI ENTRY POINT
+# CLI entry point
 # =============================================================================
 
 
@@ -463,9 +542,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Environment Variables:
-    SEARXNG_URL       SearXNG instance URL (default: http://localhost:8888)
-    SEARXNG_USERNAME  Optional basic auth username
-    SEARXNG_PASSWORD  Optional basic auth password
+    SEARXNG_URL             SearXNG instance URL (default: http://localhost:8888)
+    SEARXNG_USERNAME        Optional basic auth username
+    SEARXNG_PASSWORD        Optional basic auth password
+    CRAWL_AUTH_STORAGE_STATE  Path to default Playwright storage state JSON
+    CRAWL_AUTH_COOKIES_FILE   Path to default cookies JSON file
+    CRAWL_AUTH_PROFILE        Path to default persistent browser profile
 
 Examples:
     # STDIO transport (default, for Claude Desktop)
@@ -479,6 +561,9 @@ Examples:
 
     # With custom SearXNG instance
     SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
+
+    # With default auth (all crawls will be authenticated)
+    CRAWL_AUTH_STORAGE_STATE=./auth_state.json python -m crawler.mcp_server
 """,
     )
     parser.add_argument(
@@ -504,6 +589,13 @@ Examples:
     # Log configuration
     LOGGER.info("SearXNG URL: %s", SEARXNG_URL)
     LOGGER.info("SearXNG Auth: %s", "Enabled" if SEARXNG_USERNAME else "Disabled")
+
+    # Log auth config
+    env_auth = load_auth_from_env()
+    if env_auth:
+        LOGGER.info("Default crawl auth: Enabled (from environment)")
+    else:
+        LOGGER.info("Default crawl auth: Disabled")
 
     if args.transport == "http":
         LOGGER.info("Starting MCP server on http://%s:%d/mcp", args.host, args.port)

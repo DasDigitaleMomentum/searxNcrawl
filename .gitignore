@@ -17,3 +17,4 @@ auth_state*.json
 *_cookies.json
 *_auth.json
 profiles/
+*.coverage

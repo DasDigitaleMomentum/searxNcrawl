@@ -32,7 +32,6 @@ import argparse
 import json
 import logging
 import os
-import sys
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional

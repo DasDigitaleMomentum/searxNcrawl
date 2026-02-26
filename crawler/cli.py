@@ -62,8 +62,8 @@ def _load_config() -> None:
 
 _load_config()
 
-from .auth import AuthConfig, load_auth_from_env, load_auth_from_file
-from .document import CrawledDocument
+from .auth import AuthConfig, load_auth_from_env  # noqa: E402
+from .document import CrawledDocument  # noqa: E402
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -531,7 +531,7 @@ async def _run_capture_auth_async(args: argparse.Namespace) -> int:
     from .capture import capture_auth_state
 
     try:
-        output_path = await capture_auth_state(
+        await capture_auth_state(
             url=args.url,
             output_path=args.output,
             wait_for_url=args.wait_for_url,

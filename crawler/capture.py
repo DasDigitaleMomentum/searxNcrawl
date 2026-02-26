@@ -100,7 +100,7 @@ async def capture_auth_state(
         print(f"Timeout: {timeout}s")
         print("=" * 60 + "\n")
 
-        login_complete = False
+
 
         try:
             if wait_for_url:
@@ -117,7 +117,7 @@ async def capture_auth_state(
 
                     if pattern.search(current_url):
                         LOGGER.info("URL match detected: %s", current_url)
-                        login_complete = True
+
                         # Give time for cookies to settle
                         await asyncio.sleep(2)
                         break
@@ -133,7 +133,7 @@ async def capture_auth_state(
                         # Check if page/context is still alive
                         _ = page.url
                     except Exception:
-                        login_complete = True
+
                         break
 
                     await asyncio.sleep(poll_interval)
@@ -141,7 +141,7 @@ async def capture_auth_state(
 
         except KeyboardInterrupt:
             LOGGER.info("Capture interrupted by user")
-            login_complete = True
+
 
         # Export storage state before closing
         try:

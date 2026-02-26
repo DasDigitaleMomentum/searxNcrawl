@@ -6,11 +6,11 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import tldextract
-from crawl4ai import AsyncWebCrawler, BrowserConfig
+from crawl4ai import AsyncWebCrawler
 from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChain
 from crawl4ai.deep_crawling.filters import DomainFilter
 

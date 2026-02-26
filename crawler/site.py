@@ -14,6 +14,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig
 from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChain
 from crawl4ai.deep_crawling.filters import DomainFilter
 
+from .auth import AuthConfig, build_browser_config
 from .builder import build_document_from_result
 from .config import build_markdown_run_config
 from .document import CrawledDocument
@@ -65,6 +66,7 @@ async def crawl_site_async(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
+    auth: Optional[AuthConfig] = None,
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -74,6 +76,7 @@ async def crawl_site_async(
         max_depth: Maximum depth to crawl (0 = seed page only).
         max_pages: Maximum number of pages to crawl.
         include_subdomains: Whether to include subdomains in the crawl.
+        auth: Optional AuthConfig for authenticated crawling.
 
     Returns:
         SiteCrawlResult containing documents, errors, and stats.
@@ -109,7 +112,7 @@ async def crawl_site_async(
     # a list of results. Trade-offs:
     #   - Memory: All results held in RAM (acceptable for max_pages limit)
     #   - Latency: Response only after last page (acceptable for MCP request/response)
-    #   - Reliability: Works correctly ✓
+    #   - Reliability: Works correctly
     config.stream = False
     config.exclude_external_links = not include_subdomains
 
@@ -117,7 +120,7 @@ async def crawl_site_async(
     seen_urls: Set[str] = set()
     errors: List[Dict[str, str]] = []
 
-    browser_cfg = BrowserConfig(use_persistent_context=False)
+    browser_cfg = build_browser_config(auth)
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         crawl_result = await crawler.arun(url=seed_url, config=config)
@@ -179,6 +182,7 @@ def crawl_site(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
+    auth: Optional[AuthConfig] = None,
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -187,6 +191,7 @@ def crawl_site(
             max_depth=max_depth,
             max_pages=max_pages,
             include_subdomains=include_subdomains,
+            auth=auth,
         )
     )
 

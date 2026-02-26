@@ -6,6 +6,7 @@ their content as markdown. It supports:
 - Single page crawling
 - Multiple pages crawling (batch)
 - Site crawling with depth/page limits (BFS strategy)
+- Authenticated crawling via cookies, headers, or storage state
 
 Example usage:
 
@@ -30,6 +31,11 @@ Example usage:
     for doc in result.documents:
         print(f"--- {doc.final_url} ---")
         print(doc.markdown)
+
+    # Authenticated crawl
+    from crawler.auth import AuthConfig
+    auth = AuthConfig(storage_state="./auth_state.json")
+    doc = await crawl_page_async("https://protected.example.com", auth=auth)
 """
 
 from __future__ import annotations
@@ -39,6 +45,7 @@ from typing import List, Optional
 
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 
+from .auth import AuthConfig, build_browser_config
 from .builder import build_document_from_result
 from .config import RunConfigOverrides, build_markdown_run_config
 from .document import CrawledDocument, Reference
@@ -49,6 +56,9 @@ __all__ = [
     "CrawledDocument",
     "Reference",
     "SiteCrawlResult",
+    # Auth
+    "AuthConfig",
+    "build_browser_config",
     # Single page
     "crawl_page",
     "crawl_page_async",
@@ -86,6 +96,7 @@ async def crawl_page_async(
     url: str,
     *,
     config: Optional[CrawlerRunConfig] = None,
+    auth: Optional[AuthConfig] = None,
 ) -> CrawledDocument:
     """
     Crawl a single page and return the extracted markdown.
@@ -93,6 +104,7 @@ async def crawl_page_async(
     Args:
         url: The URL to crawl.
         config: Optional CrawlerRunConfig for advanced customization.
+        auth: Optional AuthConfig for authenticated crawling.
 
     Returns:
         CrawledDocument with markdown content, references, and metadata.
@@ -101,7 +113,8 @@ async def crawl_page_async(
         ValueError: If the crawler returns no results.
     """
     run_config = config or build_markdown_run_config()
-    async with AsyncWebCrawler() as crawler:
+    browser_cfg = build_browser_config(auth)
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
         container = await crawler.arun(url=url, config=run_config)
 
     try:
@@ -119,15 +132,17 @@ def crawl_page(
     url: str,
     *,
     config: Optional[CrawlerRunConfig] = None,
+    auth: Optional[AuthConfig] = None,
 ) -> CrawledDocument:
     """Synchronous wrapper for crawl_page_async."""
-    return asyncio.run(crawl_page_async(url, config=config))
+    return asyncio.run(crawl_page_async(url, config=config, auth=auth))
 
 
 async def crawl_pages_async(
     urls: List[str],
     *,
     config: Optional[CrawlerRunConfig] = None,
+    auth: Optional[AuthConfig] = None,
     concurrency: int = 3,
 ) -> List[CrawledDocument]:
     """
@@ -136,6 +151,7 @@ async def crawl_pages_async(
     Args:
         urls: List of URLs to crawl.
         config: Optional CrawlerRunConfig for advanced customization.
+        auth: Optional AuthConfig for authenticated crawling.
         concurrency: Maximum number of concurrent crawls.
 
     Returns:
@@ -148,7 +164,7 @@ async def crawl_pages_async(
     async def crawl_one(url: str) -> CrawledDocument:
         async with semaphore:
             try:
-                return await crawl_page_async(url, config=run_config)
+                return await crawl_page_async(url, config=run_config, auth=auth)
             except Exception as exc:
                 # Return a failed document instead of raising
                 return CrawledDocument(
@@ -167,7 +183,10 @@ def crawl_pages(
     urls: List[str],
     *,
     config: Optional[CrawlerRunConfig] = None,
+    auth: Optional[AuthConfig] = None,
     concurrency: int = 3,
 ) -> List[CrawledDocument]:
     """Synchronous wrapper for crawl_pages_async."""
-    return asyncio.run(crawl_pages_async(urls, config=config, concurrency=concurrency))
+    return asyncio.run(
+        crawl_pages_async(urls, config=config, auth=auth, concurrency=concurrency)
+    )

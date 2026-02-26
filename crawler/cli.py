@@ -308,20 +308,14 @@ Examples:
   # Site crawl with depth/page limits
   crawl https://docs.example.com --site --max-depth 2 --max-pages 10 -o docs/
 
-  # Output as JSON (includes metadata)
-  crawl https://example.com --json
-
-  # Clean output without links
-  crawl https://example.com --remove-links
+  # SPA / JS-rendered pages (wait for content to load)
+  crawl https://spa.example.com --delay 3 --wait-until networkidle
 
   # Authenticated crawl with storage state
   crawl --storage-state auth_state.json https://protected.example.com
 
-  # Authenticated crawl with cookies
-  crawl --cookies '[{"name":"sid","value":"abc","domain":".example.com"}]' https://protected.example.com
-
-  # Authenticated crawl with bearer token
-  crawl --header "Authorization: Bearer xyz" https://api.example.com
+  # Combined: authenticated SPA crawl
+  crawl --storage-state auth.json --delay 3 --wait-until networkidle https://spa.example.com
 
   # Capture auth session interactively
   crawl capture-auth --url https://login.example.com --output auth_state.json
@@ -383,6 +377,25 @@ Examples:
         action="store_true",
         help="Remove all links from markdown output",
     )
+
+    # SPA / JS-rendering options
+    spa_group = parser.add_argument_group("SPA / JavaScript rendering")
+    spa_group.add_argument(
+        "--delay",
+        type=float,
+        default=None,
+        help="Seconds to wait after page load before extracting content. "
+             "Essential for SPA/JS-rendered pages (e.g. --delay 3)",
+    )
+    spa_group.add_argument(
+        "--wait-until",
+        type=str,
+        default=None,
+        choices=["load", "domcontentloaded", "networkidle", "commit"],
+        help="Page load event to wait for (default: load). "
+             "Use 'networkidle' for SPA pages that fetch data via API calls",
+    )
+
     parser.add_argument(
         "-v",
         "--verbose",
@@ -457,11 +470,25 @@ Examples:
 async def _run_crawl_async(args: argparse.Namespace) -> int:
     """Main async entry point for crawl."""
     from . import crawl_page_async, crawl_pages_async, crawl_site_async
+    from .config import build_markdown_run_config
 
     # Build auth config from CLI args / env vars
     auth = _build_cli_auth(args)
     if auth:
         logging.info("Authentication enabled")
+
+    # Build run config with SPA overrides if specified
+    run_config = None
+    delay = getattr(args, "delay", None)
+    wait_until = getattr(args, "wait_until", None)
+    if delay is not None or wait_until is not None:
+        run_config = build_markdown_run_config()
+        if delay is not None:
+            run_config.delay_before_return_html = delay
+            logging.info("SPA delay: %.1fs after page load", delay)
+        if wait_until is not None:
+            run_config.wait_until = wait_until
+            logging.info("Page wait strategy: %s", wait_until)
 
     docs: List[CrawledDocument] = []
 
@@ -493,13 +520,14 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
 
     elif len(args.urls) == 1:
         logging.info("Crawling: %s", args.urls[0])
-        doc = await crawl_page_async(args.urls[0], auth=auth)
+        doc = await crawl_page_async(args.urls[0], config=run_config, auth=auth)
         docs = [doc]
 
     else:
         logging.info("Crawling %d URLs...", len(args.urls))
         docs = await crawl_pages_async(
             args.urls,
+            config=run_config,
             concurrency=args.concurrency,
             auth=auth,
         )

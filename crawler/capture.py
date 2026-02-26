@@ -108,6 +108,19 @@ async def capture_auth_state(
                 pattern = re.compile(wait_for_url)
                 elapsed = 0
                 poll_interval = 0.5
+
+                # Grace period: skip URL matching for the first few seconds
+                # to avoid triggering on intermediate OAuth/SSO redirects
+                # that may contain the target pattern in query params.
+                grace_period = 5.0
+                LOGGER.info(
+                    "Waiting %.0fs grace period before URL matching "
+                    "(to skip OAuth redirects)...",
+                    grace_period,
+                )
+                await asyncio.sleep(grace_period)
+                elapsed += grace_period
+
                 while elapsed < timeout:
                     try:
                         current_url = page.url

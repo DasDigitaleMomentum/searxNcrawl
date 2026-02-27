@@ -423,6 +423,9 @@ Examples:
   # Export to specific file
   crawl capture-auth --url https://login.example.com --output my_auth.json
 
+  # Use persistent browser profile (cookies survive restarts)
+  crawl capture-auth --url https://login.example.com --profile my-site
+
   # Auto-capture when redirected to dashboard
   crawl capture-auth --url https://login.example.com --wait-for-url "/dashboard"
 
@@ -454,6 +457,14 @@ Examples:
         type=int,
         default=300,
         help="Timeout in seconds for login completion (default: 300)",
+    )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=None,
+        help="Profile name or path for persistent browser session. "
+             "Named profiles are stored under ~/.crawl4ai/profiles/<name>. "
+             "Cookies and localStorage survive across sessions.",
     )
     parser.add_argument(
         "-v",
@@ -564,6 +575,7 @@ async def _run_capture_auth_async(args: argparse.Namespace) -> int:
             output_path=args.output,
             wait_for_url=args.wait_for_url,
             timeout=args.timeout,
+            profile=getattr(args, "profile", None),
         )
         return 0
     except Exception as exc:

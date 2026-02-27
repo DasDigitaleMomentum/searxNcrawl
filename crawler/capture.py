@@ -6,8 +6,11 @@ storage state to a JSON file for reuse.
 
 Example usage:
 
-    # CLI
+    # CLI — storage state file
     crawl capture-auth --url https://login.example.com --output auth_state.json
+
+    # CLI — persistent browser profile
+    crawl capture-auth --url https://login.example.com --profile my-site
 
     # Python
     from crawler.capture import capture_auth_state
@@ -29,11 +32,21 @@ from typing import Optional
 LOGGER = logging.getLogger(__name__)
 
 
+def _resolve_profile_dir(profile: str) -> Path:
+    """Resolve a profile name or path to an absolute directory."""
+    p = Path(profile)
+    if p.is_absolute():
+        return p
+    # Store named profiles under ~/.crawl4ai/profiles/<name>
+    return Path.home() / ".crawl4ai" / "profiles" / profile
+
+
 async def capture_auth_state(
     url: str,
     output_path: str = "auth_state.json",
     wait_for_url: Optional[str] = None,
     timeout: int = 300,
+    profile: Optional[str] = None,
 ) -> str:
     """Open a headed browser, let the user login, export storage state.
 
@@ -44,10 +57,14 @@ async def capture_auth_state(
 
     Args:
         url: The login page URL to navigate to.
-        output_path: Path to save the storage state JSON.
+        output_path: Path to save the storage state JSON (ignored when
+            *profile* is set — the file is saved inside the profile dir).
         wait_for_url: Optional regex pattern. When the browser URL
             matches this pattern, assume login is complete.
         timeout: Maximum seconds to wait for login completion.
+        profile: Optional profile name or path. When set, uses a
+            persistent Chromium user-data-dir so cookies, localStorage
+            and service-workers survive across sessions.
 
     Returns:
         Absolute path to the saved storage state file.
@@ -64,8 +81,15 @@ async def capture_auth_state(
             "Install it with: pip install playwright && playwright install chromium"
         ) from exc
 
-    output = Path(output_path).expanduser().resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
+    # Resolve output path
+    if profile:
+        profile_dir = _resolve_profile_dir(profile)
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        output = profile_dir / "storage_state.json"
+        LOGGER.info("Using persistent profile: %s", profile_dir)
+    else:
+        output = Path(output_path).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
 
     LOGGER.info("Opening browser for login at: %s", url)
     LOGGER.info("Timeout: %d seconds", timeout)
@@ -73,20 +97,37 @@ async def capture_auth_state(
         LOGGER.info("Will auto-capture when URL matches: %s", wait_for_url)
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
-        page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded")
+        if profile:
+            # Persistent context — cookies/localStorage survive restarts
+            context = await pw.chromium.launch_persistent_context(
+                user_data_dir=str(profile_dir),
+                headless=False,
+                viewport={"width": 1280, "height": 900},
+                args=["--disable-blink-features=AutomationControlled"],
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+            browser = None  # persistent context IS the browser
+            page = context.pages[0] if context.pages else await context.new_page()
+            await page.goto(url, wait_until="domcontentloaded")
+        else:
+            browser = await pw.chromium.launch(
+                headless=False,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+            context = await browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+            page = await context.new_page()
+            await page.goto(url, wait_until="domcontentloaded")
 
         print("\n" + "=" * 60)
         print("\U0001f510 INTERACTIVE LOGIN")
@@ -174,15 +215,22 @@ async def capture_auth_state(
             print(f"\n\u2705 Storage state saved to: {output}")
             print(f"   Cookies: {cookie_count}")
             print(f"   Origins (localStorage): {origin_count}")
-            print("\nUsage:")
-            print(f"  crawl --storage-state {output} https://protected-page.example.com")
+            if profile:
+                print("\nUsage (persistent profile):")
+                print(f"  crawl --auth-profile {profile_dir} https://protected-page.example.com")
+            else:
+                print("\nUsage:")
+                print(f"  crawl --storage-state {output} https://protected-page.example.com")
 
         except Exception as exc:
             LOGGER.error("Failed to export storage state: %s", exc)
             raise
         finally:
             try:
-                await browser.close()
+                if browser:
+                    await browser.close()
+                else:
+                    await context.close()
             except Exception:
                 pass
 
@@ -194,6 +242,7 @@ def capture_auth_state_sync(
     output_path: str = "auth_state.json",
     wait_for_url: Optional[str] = None,
     timeout: int = 300,
+    profile: Optional[str] = None,
 ) -> str:
     """Synchronous wrapper for capture_auth_state."""
     return asyncio.run(
@@ -202,5 +251,6 @@ def capture_auth_state_sync(
             output_path=output_path,
             wait_for_url=wait_for_url,
             timeout=timeout,
+            profile=profile,
         )
     )

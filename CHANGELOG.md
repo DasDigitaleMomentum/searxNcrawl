@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-26
+
+### Added
+- **Authenticated Crawling** - Crawl pages behind login walls (OAuth, SSO, MFA)
+  - Cookies injection: Pass session cookies directly
+  - Custom headers: Add `Authorization: Bearer` or any custom headers
+  - Storage state: Reuse Playwright browser state (cookies + localStorage)
+  - Persistent browser profiles: Use saved browser profiles
+- **`capture-auth` CLI subcommand** - Interactive session capture
+  - Opens a headed browser for manual login
+  - Exports storage state JSON for reuse
+  - Optional `--wait-for-url` regex for auto-capture
+- **MCP Tool auth params** - `cookies`, `headers`, `storage_state` on `crawl()` and `crawl_site()`
+- **`list_auth_profiles` MCP tool** - List available persistent browser profiles
+- **CLI auth flags** - `--cookies`, `--header`, `--storage-state`, `--auth-profile`
+- **Environment variable auth** - `CRAWL_AUTH_STORAGE_STATE`, `CRAWL_AUTH_COOKIES_FILE`, `CRAWL_AUTH_PROFILE`
+- **New modules:**
+  - `crawler/auth.py` - AuthConfig dataclass and BrowserConfig builder
+  - `crawler/capture.py` - Interactive session capture tool
+
+---
+
 ## [0.1.1] - 2026-01-26
 
 ### Fixed

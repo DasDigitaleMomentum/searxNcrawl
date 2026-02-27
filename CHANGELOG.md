@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New modules:**
   - `crawler/auth.py` - AuthConfig dataclass and BrowserConfig builder
   - `crawler/capture.py` - Interactive session capture tool
+  - `crawler/search.py` - Shared SearXNG search implementation
+- **Python API search** - `search_async()` and `search()` convenience functions with full SearXNG parameter support, returning structured `SearchResult` dataclass
+- **CLI `--pageno`** - Pagination support for the `search` command
+- **`SearchResult` / `SearchResultItem` dataclasses** - Structured search result types for the Python API
+- **E2E integration tests** - End-to-end test suite covering crawl, search, CLI, and auth flows
+
+### Changed
+- Search logic extracted from `mcp_server.py` into shared `crawler/search.py` module, eliminating duplication across MCP, CLI, and Python API
 
 ---
 

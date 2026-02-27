@@ -14,7 +14,11 @@ import pytest
 
 from crawler.auth import AuthConfig, build_browser_config, load_auth_from_env
 from crawler.builder import build_document_from_result
-from crawler.capture import capture_auth_state, capture_auth_state_sync, _resolve_profile_dir
+from crawler.capture import (
+    capture_auth_state,
+    capture_auth_state_sync,
+    _resolve_profile_dir,
+)
 from crawler.cli import (
     _build_cli_auth,
     _parse_crawl_args,
@@ -194,7 +198,9 @@ class TestCaptureBranches:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_dir = Path(tmpdir) / "profile"
             with patch("playwright.async_api.async_playwright", return_value=pw_cm):
-                with patch("crawler.capture._resolve_profile_dir", return_value=profile_dir):
+                with patch(
+                    "crawler.capture._resolve_profile_dir", return_value=profile_dir
+                ):
                     with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
                         out = await capture_auth_state(
                             url="https://login.example.com",
@@ -297,7 +303,9 @@ class TestCliBranches:
 
     @pytest.mark.asyncio
     async def test_run_crawl_async_with_env_auth_logs_auth_enabled(self):
-        doc = CrawledDocument(request_url="u", final_url="u", status="success", markdown="ok")
+        doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="ok"
+        )
         args = argparse.Namespace(
             urls=["https://example.com"],
             site=False,
@@ -307,8 +315,12 @@ class TestCliBranches:
             verbose=False,
             concurrency=1,
         )
-        with patch("crawler.cli.load_auth_from_env", return_value=AuthConfig(storage_state="x")):
-            with patch("crawler.crawl_page_async", new_callable=AsyncMock, return_value=doc):
+        with patch(
+            "crawler.cli.load_auth_from_env", return_value=AuthConfig(storage_state="x")
+        ):
+            with patch(
+                "crawler.crawl_page_async", new_callable=AsyncMock, return_value=doc
+            ):
                 assert await _run_crawl_async(args) == 0
 
     @pytest.mark.asyncio
@@ -321,6 +333,7 @@ class TestCliBranches:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -338,7 +351,9 @@ class TestCliBranches:
             {"SEARXNG_USERNAME": "user", "SEARXNG_PASSWORD": "pass"},
             clear=False,
         ):
-            with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client) as ctor:
+            with patch(
+                "crawler.search.httpx.AsyncClient", return_value=mock_client
+            ) as ctor:
                 assert await _run_search_async(args) == 0
                 assert ctor.call_args.kwargs["auth"] is not None
 
@@ -352,6 +367,7 @@ class TestCliBranches:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=True,
@@ -361,20 +377,27 @@ class TestCliBranches:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             with patch("crawler.cli.logging.exception") as mock_exc:
                 assert await _run_search_async(args) == 1
                 mock_exc.assert_called_once()
 
     def test_main_keyboardinterrupt_paths(self):
-        with patch("crawler.cli._parse_capture_auth_args", return_value=SimpleNamespace(verbose=False)):
+        with patch(
+            "crawler.cli._parse_capture_auth_args",
+            return_value=SimpleNamespace(verbose=False),
+        ):
             with patch(
                 "crawler.cli.asyncio.run",
                 side_effect=_close_coro_and_raise(KeyboardInterrupt()),
             ):
-                assert main(["capture-auth", "--url", "https://login.example.com"]) == 130
+                assert (
+                    main(["capture-auth", "--url", "https://login.example.com"]) == 130
+                )
 
-        with patch("crawler.cli._parse_crawl_args", return_value=SimpleNamespace(verbose=False)):
+        with patch(
+            "crawler.cli._parse_crawl_args", return_value=SimpleNamespace(verbose=False)
+        ):
             with patch(
                 "crawler.cli.asyncio.run",
                 side_effect=_close_coro_and_raise(KeyboardInterrupt()),
@@ -382,7 +405,9 @@ class TestCliBranches:
                 assert main(["https://example.com"]) == 130
 
     def test_main_verbose_exception_logs_traceback(self):
-        with patch("crawler.cli._parse_crawl_args", return_value=SimpleNamespace(verbose=True)):
+        with patch(
+            "crawler.cli._parse_crawl_args", return_value=SimpleNamespace(verbose=True)
+        ):
             with patch(
                 "crawler.cli.asyncio.run",
                 side_effect=_close_coro_and_raise(Exception("boom")),
@@ -392,14 +417,19 @@ class TestCliBranches:
                     mock_exc.assert_called_once()
 
     def test_search_main_keyboardinterrupt_and_verbose_exception(self):
-        with patch("crawler.cli._parse_search_args", return_value=SimpleNamespace(verbose=False)):
+        with patch(
+            "crawler.cli._parse_search_args",
+            return_value=SimpleNamespace(verbose=False),
+        ):
             with patch(
                 "crawler.cli.asyncio.run",
                 side_effect=_close_coro_and_raise(KeyboardInterrupt()),
             ):
                 assert search_main(["q"]) == 130
 
-        with patch("crawler.cli._parse_search_args", return_value=SimpleNamespace(verbose=True)):
+        with patch(
+            "crawler.cli._parse_search_args", return_value=SimpleNamespace(verbose=True)
+        ):
             with patch(
                 "crawler.cli.asyncio.run",
                 side_effect=_close_coro_and_raise(Exception("boom")),
@@ -468,8 +498,12 @@ class TestMcpBranches:
             ],
             stats={"total_pages": 1, "successful_pages": 1, "failed_pages": 0},
         )
-        with patch("crawler.crawl_site_async", new_callable=AsyncMock, return_value=result):
-            output = await crawl_site(url="https://example.com", output_format="invalid")
+        with patch(
+            "crawler.crawl_site_async", new_callable=AsyncMock, return_value=result
+        ):
+            output = await crawl_site(
+                url="https://example.com", output_format="invalid"
+            )
             assert "ok" in output
 
     def test_mcp_module_main_guard(self):
@@ -517,7 +551,9 @@ class TestSiteBranches:
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=None)
             MockCrawler.return_value = mock_instance
-            with patch("crawler.site.build_document_from_result", return_value=failed_doc):
+            with patch(
+                "crawler.site.build_document_from_result", return_value=failed_doc
+            ):
                 result = await crawl_site_async("https://example.com")
                 assert result.errors[0]["stage"] == "crawl"
                 assert result.errors[0]["error"] == "Unknown"

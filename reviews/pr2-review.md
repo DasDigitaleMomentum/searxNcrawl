@@ -75,7 +75,7 @@ Potential fit concerns:
    - The test expansion is valuable, but bundling feature work and very large test scaffolding in one PR complicates pinpointing failures and review confidence.
 
 ## Recommendation
-**Verdict: Approve with follow-up requests (or request changes if strict parity is required before merge).**
+**Verdict: Request changes before merge if strict entrypoint parity is required.**
 
 Recommended follow-ups:
 1. Add MCP/Python parity for persistent profile auth (`auth_profile` / `user_data_dir`).
@@ -83,3 +83,107 @@ Recommended follow-ups:
 3. Consider moving to argparse subparsers for `capture-auth`.
 4. Optionally split future large feature+test PRs into smaller stacked PRs.
 
+---
+
+## Implementation plan (for local follow-up)
+
+This plan is intentionally sequenced so parity-critical gaps are fixed first and
+the ergonomics refactor lands after functional parity is restored.
+
+### Phase 1 — Restore auth parity across entrypoints (highest priority)
+
+**Goal:** a user can choose all auth methods (including persistent profile) from
+CLI, MCP tool params, and Python convenience APIs.
+
+1. **Add MCP params for persistent profile auth**
+   - Extend `crawl` and `crawl_site` MCP tool signatures to accept:
+     - `auth_profile: Optional[str] = None`
+     - `user_data_dir: Optional[str] = None` (if this is separately modeled)
+   - Thread these through to the same auth-construction code path already used by
+     CLI/API.
+   - Update MCP docstrings/examples so expected precedence is explicit
+     (explicit params > env defaults).
+
+2. **Add Python convenience API parity**
+   - Ensure high-level functions (`crawl_page(_async)`, `crawl_pages(_async)`,
+     `crawl_site(_async)`) can receive profile-based auth inputs directly, not
+     only low-level config objects.
+   - Keep backward compatibility by adding optional args with defaults.
+
+3. **Add regression tests for profile parity**
+   - MCP tool tests: verify profile args are accepted and forwarded.
+   - Python API tests: verify equivalent crawl config from CLI/MCP/API produces
+     matching auth config semantics.
+
+### Phase 2 — Restore SPA run-config parity
+
+**Goal:** SPA behavior controls are consistently available regardless of entrypoint.
+
+1. **Promote SPA knobs into shared config model**
+   - Add/confirm shared runtime options for:
+     - `delay`
+     - `wait_until`
+   - Ensure defaults remain unchanged where values are omitted.
+
+2. **Expose knobs in MCP and convenience APIs**
+   - Add optional args to MCP `crawl` and `crawl_site`.
+   - Add matching optional args to Python convenience APIs.
+   - Reuse one normalization/validation path to avoid divergent behavior.
+
+3. **Add consistency tests**
+   - Parameterized tests asserting CLI, MCP, and API all resolve equivalent
+     runtime config given the same explicit inputs.
+
+### Phase 3 — CLI maintainability cleanup (non-blocking but recommended)
+
+**Goal:** reduce long-term CLI complexity before more commands are added.
+
+1. **Move to argparse subparsers**
+   - Introduce subcommands (e.g., `crawl`, `capture-auth`) using subparsers.
+   - Preserve existing invocation compatibility if possible (deprecation warning
+     if legacy forms are retained).
+
+2. **Split CLI responsibilities**
+   - Extract auth argument parsing + auth config assembly into dedicated module(s).
+   - Extract command handlers from top-level parser/bootstrap code.
+
+3. **Add smoke tests for subcommands**
+   - Verify basic command dispatch and argument parsing paths.
+
+---
+
+## Definition of done for this PR update
+
+Before considering the parity items closed, confirm all checks pass:
+
+1. **Entrypoint parity matrix checked**
+   - Persistent profile auth supported in CLI, MCP, and Python convenience APIs.
+   - SPA controls supported in CLI, MCP, and Python convenience APIs.
+
+2. **Behavioral consistency checked**
+   - Equivalent inputs from each entrypoint produce equivalent effective crawl
+     config (auth + SPA timing semantics).
+
+3. **Docs updated**
+   - README/API docs show auth and SPA options for each entrypoint.
+   - Precedence rules (explicit > env) documented once and reused.
+
+4. **Regression coverage present**
+   - New tests guard MCP/API parity pathways and config normalization.
+
+## Suggested local validation commands
+
+Run these locally after implementing the plan:
+
+```bash
+# Unit tests
+pytest -q
+
+# CLI sanity checks (examples)
+python -m crawler.cli --help
+python -m crawler.cli capture-auth --help
+python -m crawler.mcp_server --help
+
+# Optional targeted test runs if suite is large
+pytest -q -k "auth or mcp or cli"
+```

@@ -498,6 +498,46 @@ class TestRunCrawlAsync:
                 assert result == 0
 
     @pytest.mark.asyncio
+    async def test_site_crawl_with_spa_params(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.cli import _run_crawl_async
+
+        from crawler.site import SiteCrawlResult
+
+        doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        mock_result = SiteCrawlResult(
+            documents=[doc],
+            stats={"total_pages": 1, "successful_pages": 1, "failed_pages": 0},
+        )
+        args = argparse.Namespace(
+            urls=["https://example.com"],
+            site=True,
+            max_depth=2,
+            max_pages=25,
+            include_subdomains=False,
+            json_output=False,
+            output=None,
+            remove_links=False,
+            verbose=False,
+            delay=3.0,
+            wait_until="networkidle",
+        )
+        with patch("crawler.cli.load_auth_from_env", return_value=None):
+            with patch(
+                "crawler.crawl_site_async",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_site_crawl:
+                result = await _run_crawl_async(args)
+                assert result == 0
+                call_kwargs = mock_site_crawl.call_args[1]
+                assert call_kwargs["run_config"] is not None
+                assert call_kwargs["run_config"].delay_before_return_html == 3.0
+                assert call_kwargs["run_config"].wait_until == "networkidle"
+
+    @pytest.mark.asyncio
     async def test_site_crawl_multiple_urls_error(self):
         with patch("dotenv.load_dotenv"):
             from crawler.cli import _run_crawl_async

@@ -458,7 +458,7 @@ async def crawl_site(
 
 
 @mcp.tool
-async def list_auth_profiles_tool() -> str:
+async def list_auth_profiles() -> str:
     """
     List available auth profiles (persistent browser profiles).
 
@@ -476,6 +476,10 @@ async def list_auth_profiles_tool() -> str:
             indent=2,
         )
     return json.dumps({"profiles": profiles}, indent=2, ensure_ascii=False)
+
+
+# Backward-compatible alias for older imports/tests.
+list_auth_profiles_tool = list_auth_profiles
 
 
 # =============================================================================

@@ -143,63 +143,78 @@ async def capture_auth_state(
 
 
 
+        capture_ready = False
         try:
             if wait_for_url:
-                # Poll for URL match
                 pattern = re.compile(wait_for_url)
-                elapsed = 0
+                elapsed = 0.0
                 poll_interval = 0.5
 
                 # Grace period: skip URL matching for the first few seconds
                 # to avoid triggering on intermediate OAuth/SSO redirects
                 # that may contain the target pattern in query params.
-                grace_period = 5.0
-                LOGGER.info(
-                    "Waiting %.0fs grace period before URL matching "
-                    "(to skip OAuth redirects)...",
-                    grace_period,
-                )
-                await asyncio.sleep(grace_period)
-                elapsed += grace_period
+                grace_period = min(5.0, max(0.0, float(timeout) - poll_interval))
+                if grace_period > 0:
+                    LOGGER.info(
+                        "Waiting %.0fs grace period before URL matching "
+                        "(to skip OAuth redirects)...",
+                        grace_period,
+                    )
+                while elapsed < grace_period:
+                    if page.is_closed():
+                        LOGGER.info("Browser closed by user")
+                        capture_ready = True
+                        break
+                    step = min(poll_interval, grace_period - elapsed)
+                    await asyncio.sleep(step)
+                    elapsed += step
 
-                while elapsed < timeout:
+                while not capture_ready and elapsed < timeout:
                     # Check if page/browser was closed
                     if page.is_closed():
                         LOGGER.info("Browser closed by user")
+                        capture_ready = True
                         break
                     try:
                         current_url = page.url
                     except Exception:
+                        capture_ready = True
                         break
 
                     if pattern.search(current_url):
                         LOGGER.info("URL match detected: %s", current_url)
-
-                        # Give time for cookies to settle
                         await asyncio.sleep(2)
+                        capture_ready = True
                         break
 
-                    await asyncio.sleep(poll_interval)
-                    elapsed += poll_interval
+                    step = min(poll_interval, timeout - elapsed)
+                    await asyncio.sleep(step)
+                    elapsed += step
             else:
-                # Wait for browser close or timeout
-                elapsed = 0
+                # Wait for browser close; timeout is treated as non-completion.
+                elapsed = 0.0
                 poll_interval = 0.5
                 while elapsed < timeout:
-                    # Check if page/browser was closed
                     if page.is_closed():
                         LOGGER.info("Browser closed by user")
+                        capture_ready = True
                         break
                     try:
                         _ = page.url
                     except Exception:
+                        capture_ready = True
                         break
 
-                    await asyncio.sleep(poll_interval)
-                    elapsed += poll_interval
+                    step = min(poll_interval, timeout - elapsed)
+                    await asyncio.sleep(step)
+                    elapsed += step
 
         except KeyboardInterrupt:
             LOGGER.info("Capture interrupted by user")
+            capture_ready = True
+
+        if not capture_ready:
+            raise TimeoutError(f"Login was not completed within {timeout} seconds")
 
 
         # Export storage state before closing

@@ -155,9 +155,18 @@ def load_auth_from_env() -> Optional[AuthConfig]:
     Returns:
         AuthConfig if any env vars are set, None otherwise.
     """
-    storage_state = os.environ.get("CRAWL_AUTH_STORAGE_STATE")
-    cookies_file = os.environ.get("CRAWL_AUTH_COOKIES_FILE")
-    profile = os.environ.get("CRAWL_AUTH_PROFILE")
+    def _clean_env_value(var_name: str) -> Optional[str]:
+        raw = os.environ.get(var_name)
+        if raw is None:
+            return None
+        value = raw.strip()
+        if not value or value.startswith("#"):
+            return None
+        return value
+
+    storage_state = _clean_env_value("CRAWL_AUTH_STORAGE_STATE")
+    cookies_file = _clean_env_value("CRAWL_AUTH_COOKIES_FILE")
+    profile = _clean_env_value("CRAWL_AUTH_PROFILE")
 
     if not any([storage_state, cookies_file, profile]):
         return None
@@ -172,8 +181,18 @@ def load_auth_from_env() -> Optional[AuthConfig]:
         else:
             LOGGER.warning("Cookies file not found: %s", path)
 
+    resolved_storage_state = storage_state
+    if profile and not storage_state:
+        profile_storage_state = Path(profile).expanduser() / "storage_state.json"
+        if profile_storage_state.is_file():
+            resolved_storage_state = str(profile_storage_state)
+            LOGGER.info(
+                "Resolved storage state from profile: %s",
+                resolved_storage_state,
+            )
+
     return AuthConfig(
-        storage_state=storage_state,
+        storage_state=resolved_storage_state,
         cookies=cookies,
         user_data_dir=profile,
     )

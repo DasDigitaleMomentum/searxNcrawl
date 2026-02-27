@@ -16,6 +16,7 @@ def _build_playwright_mocks(
     storage_state=None,
     page_url="https://example.com/dashboard",
     page_url_raises=False,
+    page_closed=False,
 ):
     """Build a full set of Playwright mocks."""
     mock_page = MagicMock()
@@ -23,6 +24,7 @@ def _build_playwright_mocks(
         type(mock_page).url = PropertyMock(side_effect=Exception("closed"))
     else:
         type(mock_page).url = PropertyMock(return_value=page_url)
+    mock_page.is_closed = MagicMock(return_value=page_closed)
     mock_page.goto = AsyncMock()
 
     if storage_state is None:
@@ -60,7 +62,7 @@ class TestCaptureAuthState:
     @pytest.mark.asyncio
     async def test_capture_with_wait_for_url(self):
         """Mock the Playwright flow with URL match."""
-        mock_pw_cm, _, mock_context, _ = _build_playwright_mocks(
+        mock_pw_cm, _, _, _ = _build_playwright_mocks(
             page_url="https://example.com/dashboard"
         )
 
@@ -71,12 +73,13 @@ class TestCaptureAuthState:
                 "playwright.async_api.async_playwright",
                 return_value=mock_pw_cm,
             ):
-                await capture_auth_state(
-                    url="https://login.example.com",
-                    output_path=output_path,
-                    wait_for_url="/dashboard",
-                    timeout=5,
-                )
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    await capture_auth_state(
+                        url="https://login.example.com",
+                        output_path=output_path,
+                        wait_for_url="/dashboard",
+                        timeout=5,
+                    )
 
             assert os.path.exists(output_path)
             with open(output_path) as f:
@@ -86,7 +89,10 @@ class TestCaptureAuthState:
     @pytest.mark.asyncio
     async def test_capture_browser_closed(self):
         """Test when user closes the browser window."""
-        mock_pw_cm, _, _, _ = _build_playwright_mocks(page_url_raises=True)
+        mock_pw_cm, _, _, _ = _build_playwright_mocks(
+            page_url_raises=True,
+            page_closed=True,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "state.json")
@@ -95,11 +101,12 @@ class TestCaptureAuthState:
                 "playwright.async_api.async_playwright",
                 return_value=mock_pw_cm,
             ):
-                await capture_auth_state(
-                    url="https://login.example.com",
-                    output_path=output_path,
-                    timeout=1,
-                )
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    await capture_auth_state(
+                        url="https://login.example.com",
+                        output_path=output_path,
+                        timeout=1,
+                    )
 
             assert os.path.exists(output_path)
 
@@ -120,16 +127,17 @@ class TestCaptureAuthState:
                 "playwright.async_api.async_playwright",
                 return_value=mock_pw_cm,
             ):
-                with pytest.raises(Exception, match="export failed"):
-                    await capture_auth_state(
-                        url="https://login.example.com",
-                        output_path=output_path,
-                        timeout=1,
-                    )
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    with pytest.raises(Exception, match="export failed"):
+                        await capture_auth_state(
+                            url="https://login.example.com",
+                            output_path=output_path,
+                            timeout=1,
+                        )
 
     @pytest.mark.asyncio
     async def test_capture_without_wait_for_url_timeout(self):
-        """Test timeout without wait_for_url (no browser close)."""
+        """Timeout without wait_for_url should raise TimeoutError."""
         mock_pw_cm, _, _, _ = _build_playwright_mocks(
             page_url="https://login.example.com"
         )
@@ -141,18 +149,23 @@ class TestCaptureAuthState:
                 "playwright.async_api.async_playwright",
                 return_value=mock_pw_cm,
             ):
-                await capture_auth_state(
-                    url="https://login.example.com",
-                    output_path=output_path,
-                    timeout=1,
-                )
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    with pytest.raises(TimeoutError):
+                        await capture_auth_state(
+                            url="https://login.example.com",
+                            output_path=output_path,
+                            timeout=1,
+                        )
 
-            assert os.path.exists(output_path)
+            assert not os.path.exists(output_path)
 
     @pytest.mark.asyncio
     async def test_capture_with_wait_for_url_browser_closed(self):
         """Test wait_for_url mode when browser is closed before match."""
-        mock_pw_cm, _, _, _ = _build_playwright_mocks(page_url_raises=True)
+        mock_pw_cm, _, _, _ = _build_playwright_mocks(
+            page_url_raises=True,
+            page_closed=True,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "state.json")
@@ -161,14 +174,40 @@ class TestCaptureAuthState:
                 "playwright.async_api.async_playwright",
                 return_value=mock_pw_cm,
             ):
-                await capture_auth_state(
-                    url="https://login.example.com",
-                    output_path=output_path,
-                    wait_for_url="/never_matches",
-                    timeout=1,
-                )
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    await capture_auth_state(
+                        url="https://login.example.com",
+                        output_path=output_path,
+                        wait_for_url="/never_matches",
+                        timeout=1,
+                    )
 
             assert os.path.exists(output_path)
+
+    @pytest.mark.asyncio
+    async def test_capture_with_wait_for_url_timeout(self):
+        """Timeout with wait_for_url should raise TimeoutError."""
+        mock_pw_cm, _, _, _ = _build_playwright_mocks(
+            page_url="https://login.example.com"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "state.json")
+
+            with patch(
+                "playwright.async_api.async_playwright",
+                return_value=mock_pw_cm,
+            ):
+                with patch("crawler.capture.asyncio.sleep", new_callable=AsyncMock):
+                    with pytest.raises(TimeoutError):
+                        await capture_auth_state(
+                            url="https://login.example.com",
+                            output_path=output_path,
+                            wait_for_url="/never_matches",
+                            timeout=1,
+                        )
+
+            assert not os.path.exists(output_path)
 
 
 class TestCaptureAuthStateSync:

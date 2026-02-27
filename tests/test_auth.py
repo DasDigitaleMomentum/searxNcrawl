@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -127,6 +128,37 @@ class TestLoadAuthFromEnv:
             assert result is not None
             assert result.user_data_dir == "/path/to/profile"
 
+    def test_profile_env_resolves_storage_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir)
+            storage_state_path = profile_path / "storage_state.json"
+            storage_state_path.write_text('{"cookies":[],"origins":[]}')
+            with mock.patch.dict(
+                os.environ,
+                {"CRAWL_AUTH_PROFILE": str(profile_path)},
+                clear=True,
+            ):
+                result = load_auth_from_env()
+                assert result is not None
+                assert result.user_data_dir == str(profile_path)
+                assert result.storage_state == str(storage_state_path)
+
+    def test_storage_state_env_takes_precedence_over_profile(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir)
+            (profile_path / "storage_state.json").write_text('{"cookies":[]}')
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "CRAWL_AUTH_PROFILE": str(profile_path),
+                    "CRAWL_AUTH_STORAGE_STATE": "/explicit/state.json",
+                },
+                clear=True,
+            ):
+                result = load_auth_from_env()
+                assert result is not None
+                assert result.storage_state == "/explicit/state.json"
+
     def test_cookies_file_env(self):
         cookies = [{"name": "a", "value": "b", "domain": ".test.com"}]
         with tempfile.NamedTemporaryFile(
@@ -145,6 +177,18 @@ class TestLoadAuthFromEnv:
                 assert result.cookies == cookies
         finally:
             os.unlink(path)
+
+    def test_placeholder_comment_values_are_ignored(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CRAWL_AUTH_STORAGE_STATE": "   # placeholder",
+                "CRAWL_AUTH_COOKIES_FILE": "   # placeholder",
+                "CRAWL_AUTH_PROFILE": "   # placeholder",
+            },
+            clear=True,
+        ):
+            assert load_auth_from_env() is None
 
 
 class TestLoadAuthFromFile:

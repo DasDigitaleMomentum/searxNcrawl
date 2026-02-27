@@ -537,12 +537,12 @@ class TestListAuthProfilesTool:
     @pytest.mark.asyncio
     async def test_no_profiles(self):
         with patch("dotenv.load_dotenv"):
-            from crawler.mcp_server import list_auth_profiles_tool
+            from crawler.mcp_server import list_auth_profiles
 
         with patch(
             "crawler.mcp_server._list_auth_profiles", return_value=[]
         ):
-            result = await list_auth_profiles_tool()
+            result = await list_auth_profiles()
             data = json.loads(result)
             assert data["profiles"] == []
             assert "message" in data
@@ -550,7 +550,7 @@ class TestListAuthProfilesTool:
     @pytest.mark.asyncio
     async def test_with_profiles(self):
         with patch("dotenv.load_dotenv"):
-            from crawler.mcp_server import list_auth_profiles_tool
+            from crawler.mcp_server import list_auth_profiles
 
         profiles = [
             {"name": "test", "path": "/tmp/test", "modified": 1234567890.0}
@@ -558,7 +558,17 @@ class TestListAuthProfilesTool:
         with patch(
             "crawler.mcp_server._list_auth_profiles", return_value=profiles
         ):
-            result = await list_auth_profiles_tool()
+            result = await list_auth_profiles()
             data = json.loads(result)
             assert len(data["profiles"]) == 1
             assert data["profiles"][0]["name"] == "test"
+
+    @pytest.mark.asyncio
+    async def test_backward_compat_alias(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import list_auth_profiles_tool
+
+        with patch("crawler.mcp_server._list_auth_profiles", return_value=[]):
+            result = await list_auth_profiles_tool()
+            data = json.loads(result)
+            assert "profiles" in data

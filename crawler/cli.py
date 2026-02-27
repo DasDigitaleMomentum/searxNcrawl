@@ -529,6 +529,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             max_pages=args.max_pages,
             include_subdomains=args.include_subdomains,
             auth=auth,
+            run_config=run_config,
         )
         docs = result.documents
         logging.info(

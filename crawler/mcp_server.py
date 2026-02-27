@@ -192,14 +192,16 @@ def _build_auth_config(
     cookies: Optional[List[Dict[str, str]]] = None,
     headers: Optional[Dict[str, str]] = None,
     storage_state: Optional[str] = None,
+    auth_profile: Optional[str] = None,
 ) -> Optional[AuthConfig]:
     """Build an AuthConfig from MCP tool parameters, falling back to env vars."""
     # Explicit parameters take precedence
-    if any([cookies, headers, storage_state]):
+    if any([cookies, headers, storage_state, auth_profile]):
         return AuthConfig(
             cookies=cookies,
             headers=headers,
             storage_state=storage_state,
+            user_data_dir=auth_profile,
         )
     # Fall back to environment variables
     return load_auth_from_env()
@@ -219,6 +221,9 @@ async def crawl(
     cookies: Optional[List[Dict[str, str]]] = None,
     headers: Optional[Dict[str, str]] = None,
     storage_state: Optional[str] = None,
+    auth_profile: Optional[str] = None,
+    delay: Optional[float] = None,
+    wait_until: Optional[str] = None,
 ):
     """
     Crawl one or more web pages and extract their content as markdown.
@@ -237,6 +242,13 @@ async def crawl(
             Example: {"Authorization": "Bearer xyz123"}
         storage_state: Optional path to a Playwright storage state JSON file
             (exported via capture-auth CLI). Contains cookies and localStorage.
+        auth_profile: Optional path to a persistent browser profile directory.
+            Use for reusing a logged-in Chrome session across crawls.
+        delay: Optional seconds to wait after page load before extracting content.
+            Essential for SPA/JS-rendered pages (e.g. delay=3).
+        wait_until: Optional page load event to wait for.
+            One of: 'load', 'domcontentloaded', 'networkidle', 'commit'.
+            Use 'networkidle' for SPA pages that fetch data via API calls.
 
     Returns:
         Crawled content in the specified format.
@@ -251,19 +263,29 @@ async def crawl(
             cookies=[{"name": "sid", "value": "abc", "domain": ".example.com"}]
         )
 
-        # Authenticated with storage state
+        # Authenticated with persistent browser profile
         crawl(
             urls=["https://protected.example.com"],
-            storage_state="/path/to/auth_state.json"
+            auth_profile="/path/to/chrome-profile"
         )
 
-        # Authenticated with bearer token
+        # SPA with delay and wait strategy
         crawl(
-            urls=["https://api.example.com"],
-            headers={"Authorization": "Bearer xyz123"}
+            urls=["https://spa.example.com"],
+            delay=3,
+            wait_until="networkidle"
+        )
+
+        # Combined: authenticated SPA crawl
+        crawl(
+            urls=["https://protected-spa.example.com"],
+            storage_state="/path/to/auth_state.json",
+            delay=3,
+            wait_until="networkidle"
         )
     """
     from . import crawl_page_async, crawl_pages_async
+    from .config import build_markdown_run_config
 
     # Validate output format
     try:
@@ -272,15 +294,26 @@ async def crawl(
         fmt = OutputFormat.markdown
 
     # Build auth config
-    auth = _build_auth_config(cookies, headers, storage_state)
+    auth = _build_auth_config(cookies, headers, storage_state, auth_profile)
     if auth:
         LOGGER.info("Crawling with authentication enabled")
+
+    # Build run config with SPA overrides if specified
+    run_config = None
+    if delay is not None or wait_until is not None:
+        run_config = build_markdown_run_config()
+        if delay is not None:
+            run_config.delay_before_return_html = delay
+            LOGGER.info("SPA delay: %.1fs after page load", delay)
+        if wait_until is not None:
+            run_config.wait_until = wait_until
+            LOGGER.info("Page wait strategy: %s", wait_until)
 
     LOGGER.info("Crawling %d URL(s)...", len(urls))
 
     if len(urls) == 1:
         try:
-            doc = await crawl_page_async(urls[0], auth=auth)
+            doc = await crawl_page_async(urls[0], config=run_config, auth=auth)
             docs = [doc]
         except Exception as exc:
             docs = [
@@ -293,7 +326,9 @@ async def crawl(
                 )
             ]
     else:
-        docs = await crawl_pages_async(urls, concurrency=concurrency, auth=auth)
+        docs = await crawl_pages_async(
+            urls, config=run_config, concurrency=concurrency, auth=auth
+        )
 
     successful = sum(1 for d in docs if d.status == "success")
     LOGGER.info("Completed: %d/%d successful", successful, len(docs))
@@ -312,6 +347,9 @@ async def crawl_site(
     cookies: Optional[List[Dict[str, str]]] = None,
     headers: Optional[Dict[str, str]] = None,
     storage_state: Optional[str] = None,
+    auth_profile: Optional[str] = None,
+    delay: Optional[float] = None,
+    wait_until: Optional[str] = None,
 ):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
@@ -327,6 +365,11 @@ async def crawl_site(
             Each dict should have 'name', 'value', 'domain' keys.
         headers: Optional dict of custom HTTP headers.
         storage_state: Optional path to a Playwright storage state JSON file.
+        auth_profile: Optional path to a persistent browser profile directory.
+        delay: Optional seconds to wait after page load before extracting content.
+            Essential for SPA/JS-rendered pages.
+        wait_until: Optional page load event to wait for.
+            One of: 'load', 'domcontentloaded', 'networkidle', 'commit'.
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -335,15 +378,23 @@ async def crawl_site(
         # Basic site crawl
         crawl_site(url="https://docs.example.com")
 
-        # Authenticated site crawl
+        # Authenticated site crawl with browser profile
         crawl_site(
             url="https://internal.example.com",
-            storage_state="/path/to/auth_state.json",
+            auth_profile="/path/to/chrome-profile",
             max_depth=3,
             max_pages=50
         )
+
+        # SPA site crawl with delay
+        crawl_site(
+            url="https://spa.example.com",
+            delay=3,
+            wait_until="networkidle"
+        )
     """
     from . import crawl_site_async
+    from .config import build_markdown_run_config
 
     # Validate output format
     try:
@@ -352,9 +403,20 @@ async def crawl_site(
         fmt = OutputFormat.markdown
 
     # Build auth config
-    auth = _build_auth_config(cookies, headers, storage_state)
+    auth = _build_auth_config(cookies, headers, storage_state, auth_profile)
     if auth:
         LOGGER.info("Site crawl with authentication enabled")
+
+    # Build run config with SPA overrides if specified
+    run_config = None
+    if delay is not None or wait_until is not None:
+        run_config = build_markdown_run_config()
+        if delay is not None:
+            run_config.delay_before_return_html = delay
+            LOGGER.info("SPA delay: %.1fs after page load", delay)
+        if wait_until is not None:
+            run_config.wait_until = wait_until
+            LOGGER.info("Page wait strategy: %s", wait_until)
 
     LOGGER.info(
         "Starting site crawl: %s (max_depth=%d, max_pages=%d)",
@@ -369,6 +431,7 @@ async def crawl_site(
         max_pages=max_pages,
         include_subdomains=include_subdomains,
         auth=auth,
+        run_config=run_config,
     )
 
     LOGGER.info(

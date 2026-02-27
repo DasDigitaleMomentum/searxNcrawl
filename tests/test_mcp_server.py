@@ -229,6 +229,18 @@ class TestBuildAuthConfig:
             assert result is not None
             assert result.storage_state == "/env/state.json"
 
+    def test_with_auth_profile(self):
+        result = _build_auth_config(auth_profile="/path/to/profile")
+        assert result is not None
+        assert result.user_data_dir == "/path/to/profile"
+
+    def test_auth_profile_with_cookies(self):
+        cookies = [{"name": "s", "value": "v", "domain": ".e.com"}]
+        result = _build_auth_config(cookies=cookies, auth_profile="/profile")
+        assert result is not None
+        assert result.cookies == cookies
+        assert result.user_data_dir == "/profile"
+
 
 class TestCrawlTool:
     @pytest.mark.asyncio
@@ -317,6 +329,77 @@ class TestCrawlTool:
             )
             assert isinstance(result, str)
 
+    @pytest.mark.asyncio
+    async def test_crawl_with_auth_profile(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl
+
+        mock_doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        with patch(
+            "crawler.crawl_page_async",
+            new_callable=AsyncMock,
+            return_value=mock_doc,
+        ) as mock_crawl:
+            result = await crawl(
+                urls=["https://a.com"],
+                auth_profile="/path/to/profile",
+            )
+            assert isinstance(result, str)
+            # Verify auth was passed with user_data_dir
+            call_kwargs = mock_crawl.call_args[1]
+            assert call_kwargs["auth"] is not None
+            assert call_kwargs["auth"].user_data_dir == "/path/to/profile"
+
+    @pytest.mark.asyncio
+    async def test_crawl_with_delay_and_wait_until(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl
+
+        mock_doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        with patch(
+            "crawler.crawl_page_async",
+            new_callable=AsyncMock,
+            return_value=mock_doc,
+        ) as mock_crawl:
+            result = await crawl(
+                urls=["https://a.com"],
+                delay=3.0,
+                wait_until="networkidle",
+            )
+            assert isinstance(result, str)
+            # Verify run config was passed with SPA settings
+            call_kwargs = mock_crawl.call_args[1]
+            run_config = call_kwargs["config"]
+            assert run_config is not None
+            assert run_config.delay_before_return_html == 3.0
+            assert run_config.wait_until == "networkidle"
+
+    @pytest.mark.asyncio
+    async def test_crawl_multiple_with_spa_params(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl
+
+        mock_doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        with patch(
+            "crawler.crawl_pages_async",
+            new_callable=AsyncMock,
+            return_value=[mock_doc, mock_doc],
+        ) as mock_crawl:
+            result = await crawl(
+                urls=["https://a.com", "https://b.com"],
+                delay=2.0,
+            )
+            assert isinstance(result, str)
+            call_kwargs = mock_crawl.call_args[1]
+            assert call_kwargs["config"] is not None
+            assert call_kwargs["config"].delay_before_return_html == 2.0
+
 
 class TestCrawlSiteTool:
     @pytest.mark.asyncio
@@ -374,6 +457,80 @@ class TestCrawlSiteTool:
             )
             data = json.loads(result)
             assert "stats" in data
+
+    @pytest.mark.asyncio
+    async def test_crawl_site_with_auth_profile(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl_site
+
+        from crawler.site import SiteCrawlResult
+
+        mock_result = SiteCrawlResult(
+            documents=[
+                CrawledDocument(
+                    request_url="u",
+                    final_url="u",
+                    status="success",
+                    markdown="Page",
+                )
+            ],
+            stats={
+                "total_pages": 1,
+                "successful_pages": 1,
+                "failed_pages": 0,
+            },
+        )
+        with patch(
+            "crawler.crawl_site_async",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_crawl:
+            result = await crawl_site(
+                url="https://example.com",
+                auth_profile="/path/to/profile",
+            )
+            assert "Page" in result
+            call_kwargs = mock_crawl.call_args[1]
+            assert call_kwargs["auth"] is not None
+            assert call_kwargs["auth"].user_data_dir == "/path/to/profile"
+
+    @pytest.mark.asyncio
+    async def test_crawl_site_with_spa_params(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl_site
+
+        from crawler.site import SiteCrawlResult
+
+        mock_result = SiteCrawlResult(
+            documents=[
+                CrawledDocument(
+                    request_url="u",
+                    final_url="u",
+                    status="success",
+                    markdown="SPA",
+                )
+            ],
+            stats={
+                "total_pages": 1,
+                "successful_pages": 1,
+                "failed_pages": 0,
+            },
+        )
+        with patch(
+            "crawler.crawl_site_async",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_crawl:
+            result = await crawl_site(
+                url="https://example.com",
+                delay=5.0,
+                wait_until="networkidle",
+            )
+            assert "SPA" in result
+            call_kwargs = mock_crawl.call_args[1]
+            assert call_kwargs["run_config"] is not None
+            assert call_kwargs["run_config"].delay_before_return_html == 5.0
+            assert call_kwargs["run_config"].wait_until == "networkidle"
 
 
 class TestListAuthProfilesTool:

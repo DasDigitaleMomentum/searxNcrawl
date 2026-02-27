@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import tldextract
-from crawl4ai import AsyncWebCrawler
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChain
 from crawl4ai.deep_crawling.filters import DomainFilter
 
@@ -67,6 +67,7 @@ async def crawl_site_async(
     max_pages: int = 25,
     include_subdomains: bool = False,
     auth: Optional[AuthConfig] = None,
+    run_config: Optional[CrawlerRunConfig] = None,
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -77,6 +78,8 @@ async def crawl_site_async(
         max_pages: Maximum number of pages to crawl.
         include_subdomains: Whether to include subdomains in the crawl.
         auth: Optional AuthConfig for authenticated crawling.
+        run_config: Optional CrawlerRunConfig for custom crawl settings
+            (e.g. SPA delay, wait_until). If None, uses default config.
 
     Returns:
         SiteCrawlResult containing documents, errors, and stats.
@@ -97,7 +100,7 @@ async def crawl_site_async(
     filter_chain = FilterChain(filters) if filters else None
 
     # Configure the crawl
-    config = build_markdown_run_config()
+    config = run_config if run_config is not None else build_markdown_run_config()
     config.deep_crawl_strategy = BFSDeepCrawlStrategy(
         max_depth=max_depth,
         max_pages=max_pages,
@@ -183,6 +186,7 @@ def crawl_site(
     max_pages: int = 25,
     include_subdomains: bool = False,
     auth: Optional[AuthConfig] = None,
+    run_config: Optional[CrawlerRunConfig] = None,
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -192,6 +196,7 @@ def crawl_site(
             max_pages=max_pages,
             include_subdomains=include_subdomains,
             auth=auth,
+            run_config=run_config,
         )
     )
 

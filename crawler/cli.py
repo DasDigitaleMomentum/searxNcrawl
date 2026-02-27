@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import httpx
 from dotenv import load_dotenv
 
 # Configuration directory for global CLI usage
@@ -78,11 +77,11 @@ def _setup_logging(verbose: bool) -> None:
 def _strip_markdown_links(text: str) -> str:
     """Remove markdown links from text, keeping only the link text."""
     # Replace [text](url) with just text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     # Remove standalone URLs (http/https)
-    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r"https?://\S+", "", text)
     # Clean up any double spaces left behind
-    text = re.sub(r'  +', ' ', text)
+    text = re.sub(r"  +", " ", text)
     return text
 
 
@@ -269,15 +268,15 @@ def _add_auth_args(parser: argparse.ArgumentParser) -> None:
         "--cookies",
         type=str,
         default=None,
-        help='Cookies as JSON string or path to cookies JSON file. '
-             'Example: \'[{"name":"sid","value":"abc","domain":".example.com"}]\'',
+        help="Cookies as JSON string or path to cookies JSON file. "
+        'Example: \'[{"name":"sid","value":"abc","domain":".example.com"}]\'',
     )
     auth_group.add_argument(
         "--header",
         action="append",
         default=None,
-        help='Custom HTTP header (can be repeated). '
-             'Example: --header "Authorization: Bearer xyz"',
+        help="Custom HTTP header (can be repeated). "
+        'Example: --header "Authorization: Bearer xyz"',
     )
     auth_group.add_argument(
         "--storage-state",
@@ -394,7 +393,7 @@ Examples:
         type=float,
         default=None,
         help="Seconds to wait after page load before extracting content. "
-             "Essential for SPA/JS-rendered pages (e.g. --delay 3)",
+        "Essential for SPA/JS-rendered pages (e.g. --delay 3)",
     )
     spa_group.add_argument(
         "--wait-until",
@@ -402,7 +401,7 @@ Examples:
         default=None,
         choices=["load", "domcontentloaded", "networkidle", "commit"],
         help="Page load event to wait for (default: load). "
-             "Use 'networkidle' for SPA pages that fetch data via API calls",
+        "Use 'networkidle' for SPA pages that fetch data via API calls",
     )
 
     parser.add_argument(
@@ -472,8 +471,8 @@ Examples:
         type=str,
         default=None,
         help="Profile name or path for persistent browser session. "
-             "Named profiles are stored under ~/.crawl4ai/profiles/<name>. "
-             "Cookies and localStorage survive across sessions.",
+        "Named profiles are stored under ~/.crawl4ai/profiles/<name>. "
+        "Cookies and localStorage survive across sessions.",
     )
     parser.add_argument(
         "-v",
@@ -700,6 +699,12 @@ Examples:
         help="Maximum results to return (default: 10)",
     )
     parser.add_argument(
+        "--pageno",
+        type=int,
+        default=1,
+        help="Page number for results (default: 1)",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -724,94 +729,47 @@ Examples:
 
 async def _run_search_async(args: argparse.Namespace) -> int:
     """Main async entry point for search."""
-    searxng_url = os.getenv("SEARXNG_URL", "http://localhost:8888")
-    searxng_username = os.getenv("SEARXNG_USERNAME")
-    searxng_password = os.getenv("SEARXNG_PASSWORD")
+    from .search import SearchError, search_async
 
     logging.info("Searching for: %s", args.query)
 
-    # Build search parameters
-    params: Dict[str, Any] = {
-        "q": args.query,
-        "format": "json",
-        "language": args.language,
-        "safesearch": args.safesearch,
-    }
-
-    if args.time_range:
-        params["time_range"] = args.time_range
-
-    if args.categories:
-        params["categories"] = ",".join(args.categories)
-
-    if args.engines:
-        params["engines"] = ",".join(args.engines)
-
-    # Create HTTP client
-    auth = None
-    if searxng_username and searxng_password:
-        auth = httpx.BasicAuth(searxng_username, searxng_password)
-
     try:
-        async with httpx.AsyncClient(
-            base_url=searxng_url,
-            auth=auth,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            timeout=30.0,
-        ) as client:
-            response = await client.get("/search", params=params)
-            response.raise_for_status()
-            data = response.json()
-
-        # Limit results
-        max_results = min(max(1, args.max_results), 50)
-        if "results" in data:
-            data["results"] = data["results"][:max_results]
-            data["number_of_results"] = len(data["results"])
-
-        logging.info("Found %d results", data.get("number_of_results", 0))
-
-        # Format output
-        if args.json_output:
-            output = json.dumps(data, indent=2, ensure_ascii=False)
-        else:
-            output = _format_search_markdown(data)
-
-        if args.output:
-            path = Path(args.output)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(output)
-            logging.info("Wrote results to %s", path)
-        else:
-            print(output)
-
-        return 0
-
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 401:
-            logging.error(
-                "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
-            )
-        else:
-            logging.error(
-                "SearXNG API error: %d - %s",
-                exc.response.status_code,
-                exc.response.text,
-            )
+        result = await search_async(
+            args.query,
+            language=args.language,
+            time_range=args.time_range,
+            categories=args.categories,
+            engines=args.engines,
+            safesearch=args.safesearch,
+            pageno=args.pageno,
+            max_results=args.max_results,
+        )
+    except SearchError as exc:
+        logging.error(str(exc))
         return 1
-
-    except httpx.RequestError as exc:
-        logging.error("Request failed: %s", exc)
-        return 1
-
     except Exception as exc:
         logging.error("Unexpected error: %s", exc)
         if args.verbose:
             logging.exception("Full traceback:")
         return 1
+
+    logging.info("Found %d results", result.number_of_results)
+
+    data = result.to_dict()
+    if args.json_output:
+        output = json.dumps(data, indent=2, ensure_ascii=False)
+    else:
+        output = _format_search_markdown(data)
+
+    if args.output:
+        path = Path(args.output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(output)
+        logging.info("Wrote results to %s", path)
+    else:
+        print(output)
+
+    return 0
 
 
 def search_main(argv: Optional[List[str]] = None) -> int:

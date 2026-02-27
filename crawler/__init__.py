@@ -49,6 +49,7 @@ from .auth import AuthConfig, build_browser_config
 from .builder import build_document_from_result
 from .config import RunConfigOverrides, build_markdown_run_config
 from .document import CrawledDocument, Reference
+from .search import SearchError, SearchResult, SearchResultItem, search, search_async
 from .site import SiteCrawlResult, crawl_site, crawl_site_async
 
 __all__ = [
@@ -56,6 +57,12 @@ __all__ = [
     "CrawledDocument",
     "Reference",
     "SiteCrawlResult",
+    # Search
+    "SearchResult",
+    "SearchResultItem",
+    "SearchError",
+    "search",
+    "search_async",
     # Auth
     "AuthConfig",
     "build_browser_config",

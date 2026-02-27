@@ -36,12 +36,17 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import httpx
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-from .auth import AuthConfig, list_auth_profiles as _list_auth_profiles, load_auth_from_env
+from .auth import (
+    AuthConfig,
+    list_auth_profiles as _list_auth_profiles,
+    load_auth_from_env,
+)
 from .document import CrawledDocument
+from .search import SearchError
+from .search import search_async as _search_async
 
 # Configure logging
 logging.basicConfig(
@@ -53,11 +58,6 @@ LOGGER = logging.getLogger(__name__)
 
 # Load .env before reading environment variables
 load_dotenv()
-
-# SearXNG configuration from environment
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
-SEARXNG_USERNAME = os.getenv("SEARXNG_USERNAME")
-SEARXNG_PASSWORD = os.getenv("SEARXNG_PASSWORD")
 
 # Create the MCP server
 mcp = FastMCP(
@@ -102,12 +102,13 @@ def _strip_markdown_links(text: str) -> str:
     Converts [text](url) to text and removes standalone URLs.
     """
     import re
+
     # Replace [text](url) with just text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     # Remove standalone URLs (http/https)
-    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r"https?://\S+", "", text)
     # Clean up any double spaces left behind
-    text = re.sub(r'  +', ' ', text)
+    text = re.sub(r"  +", " ", text)
     return text
 
 
@@ -204,6 +205,7 @@ def _build_auth_config(
         resolved_storage = storage_state
         if auth_profile and not storage_state:
             from pathlib import Path
+
             ss_path = Path(auth_profile) / "storage_state.json"
             if ss_path.is_file():
                 resolved_storage = str(ss_path)
@@ -454,7 +456,9 @@ async def crawl_site(
         result.stats.get("failed_pages", 0),
     )
 
-    return _format_output(result.documents, fmt, stats=result.stats, remove_links=remove_links)
+    return _format_output(
+        result.documents, fmt, stats=result.stats, remove_links=remove_links
+    )
 
 
 @mcp.tool
@@ -472,7 +476,10 @@ async def list_auth_profiles() -> str:
     profiles = _list_auth_profiles()
     if not profiles:
         return json.dumps(
-            {"profiles": [], "message": "No auth profiles found in ~/.crawl4ai/profiles/"},
+            {
+                "profiles": [],
+                "message": "No auth profiles found in ~/.crawl4ai/profiles/",
+            },
             indent=2,
         )
     return json.dumps({"profiles": profiles}, indent=2, ensure_ascii=False)
@@ -485,23 +492,6 @@ list_auth_profiles_tool = list_auth_profiles
 # =============================================================================
 # SearXNG Search
 # =============================================================================
-
-
-def _get_searxng_client() -> httpx.AsyncClient:
-    """Create an httpx client for SearXNG with optional basic auth."""
-    auth = None
-    if SEARXNG_USERNAME and SEARXNG_PASSWORD:
-        auth = httpx.BasicAuth(SEARXNG_USERNAME, SEARXNG_PASSWORD)
-
-    return httpx.AsyncClient(
-        base_url=SEARXNG_URL,
-        auth=auth,
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-        timeout=30.0,
-    )
 
 
 @mcp.tool
@@ -552,56 +542,23 @@ async def search(
     """
     LOGGER.info("Searching SearXNG for: %s", query)
 
-    # Build search parameters
-    params: Dict[str, Any] = {
-        "q": query,
-        "format": "json",
-        "language": language,
-        "safesearch": safesearch,
-        "pageno": max(1, pageno),
-    }
-
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-
-    if categories:
-        params["categories"] = ",".join(categories)
-
-    if engines:
-        params["engines"] = ",".join(engines)
-
     try:
-        async with _get_searxng_client() as client:
-            response = await client.get("/search", params=params)
-            response.raise_for_status()
-            data = response.json()
+        result = await _search_async(
+            query,
+            language=language,
+            time_range=time_range,
+            categories=categories,
+            engines=engines,
+            safesearch=safesearch,
+            pageno=pageno,
+            max_results=max_results,
+        )
+        LOGGER.info("Search returned %d results", result.number_of_results)
+        return json.dumps(result.to_dict(), indent=2, ensure_ascii=False)
 
-        # Limit results
-        max_results = min(max(1, max_results), 50)
-        if "results" in data:
-            data["results"] = data["results"][:max_results]
-            data["number_of_results"] = len(data["results"])
-
-        LOGGER.info("Search returned %d results", data.get("number_of_results", 0))
-
-        return json.dumps(data, indent=2, ensure_ascii=False)
-
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 401:
-            error_msg = (
-                "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
-            )
-        else:
-            error_msg = (
-                f"SearXNG API error: {exc.response.status_code} - {exc.response.text}"
-            )
-        LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
-
-    except httpx.RequestError as exc:
-        error_msg = f"Request failed: {str(exc)}"
-        LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
+    except SearchError as exc:
+        LOGGER.error(str(exc))
+        return json.dumps({"error": str(exc), "query": query}, ensure_ascii=False)
 
     except Exception as exc:
         error_msg = f"Unexpected error: {str(exc)}"
@@ -666,8 +623,10 @@ Examples:
     args = parser.parse_args()
 
     # Log configuration
-    LOGGER.info("SearXNG URL: %s", SEARXNG_URL)
-    LOGGER.info("SearXNG Auth: %s", "Enabled" if SEARXNG_USERNAME else "Disabled")
+    LOGGER.info("SearXNG URL: %s", os.getenv("SEARXNG_URL", "http://localhost:8888"))
+    LOGGER.info(
+        "SearXNG Auth: %s", "Enabled" if os.getenv("SEARXNG_USERNAME") else "Disabled"
+    )
 
     # Log auth config
     env_auth = load_auth_from_env()

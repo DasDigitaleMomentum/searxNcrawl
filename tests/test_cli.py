@@ -20,6 +20,7 @@ with patch("dotenv.load_dotenv"):
         _format_search_markdown,
         _parse_capture_auth_args,
         _parse_crawl_args,
+        _parse_search_args,
         _strip_markdown_links,
         _url_to_filename,
         _write_output,
@@ -232,9 +233,7 @@ class TestBuildCliAuth:
 
     def test_with_cookies_file(self):
         cookies = [{"name": "s", "value": "v", "domain": ".e.com"}]
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(cookies, f)
             path = f.name
         try:
@@ -330,9 +329,7 @@ class TestAddAuthArgs:
     def test_header_append(self):
         parser = argparse.ArgumentParser()
         _add_auth_args(parser)
-        args = parser.parse_args(
-            ["--header", "Auth: test", "--header", "X: y"]
-        )
+        args = parser.parse_args(["--header", "Auth: test", "--header", "X: y"])
         assert len(args.header) == 2
 
 
@@ -344,9 +341,7 @@ class TestParseCrawlArgs:
         assert args.verbose is False
 
     def test_site_mode(self):
-        args = _parse_crawl_args(
-            ["https://example.com", "--site", "--max-depth", "3"]
-        )
+        args = _parse_crawl_args(["https://example.com", "--site", "--max-depth", "3"])
         assert args.site is True
         assert args.max_depth == 3
 
@@ -359,9 +354,7 @@ class TestParseCrawlArgs:
 
 class TestParseCaptureAuthArgs:
     def test_basic(self):
-        args = _parse_capture_auth_args(
-            ["--url", "https://login.example.com"]
-        )
+        args = _parse_capture_auth_args(["--url", "https://login.example.com"])
         assert args.url == "https://login.example.com"
         assert args.output == "auth_state.json"
         assert args.timeout == 300
@@ -370,10 +363,14 @@ class TestParseCaptureAuthArgs:
     def test_with_all_options(self):
         args = _parse_capture_auth_args(
             [
-                "--url", "https://login.example.com",
-                "--output", "my_auth.json",
-                "--wait-for-url", "/dashboard",
-                "--timeout", "600",
+                "--url",
+                "https://login.example.com",
+                "--output",
+                "my_auth.json",
+                "--wait-for-url",
+                "/dashboard",
+                "--timeout",
+                "600",
                 "-v",
             ]
         )
@@ -388,7 +385,9 @@ class TestMainEntryPoint:
         with patch("dotenv.load_dotenv"):
             from crawler.cli import main
 
-        with patch("crawler.cli._run_capture_auth_async", new_callable=AsyncMock) as mock:
+        with patch(
+            "crawler.cli._run_capture_auth_async", new_callable=AsyncMock
+        ) as mock:
             mock.return_value = 0
             result = main(["capture-auth", "--url", "https://login.example.com"])
             assert result == 0
@@ -433,6 +432,48 @@ class TestSearchMain:
             from crawler.cli import search_main
 
         assert callable(search_main)
+
+
+class TestParseSearchArgs:
+    def test_pageno_explicit(self):
+        args = _parse_search_args(["query", "--pageno", "3"])
+        assert args.pageno == 3
+
+    def test_pageno_default(self):
+        args = _parse_search_args(["query"])
+        assert args.pageno == 1
+
+    def test_all_search_args(self):
+        args = _parse_search_args(
+            [
+                "my query",
+                "--language",
+                "de",
+                "--time-range",
+                "week",
+                "--categories",
+                "general",
+                "news",
+                "--engines",
+                "google",
+                "--safesearch",
+                "2",
+                "--max-results",
+                "5",
+                "--pageno",
+                "2",
+                "--json",
+            ]
+        )
+        assert args.query == "my query"
+        assert args.language == "de"
+        assert args.time_range == "week"
+        assert args.categories == ["general", "news"]
+        assert args.engines == ["google"]
+        assert args.safesearch == 2
+        assert args.max_results == 5
+        assert args.pageno == 2
+        assert args.json_output is True
 
 
 class TestRunCrawlAsync:

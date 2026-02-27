@@ -16,6 +16,7 @@ from crawler.auth import AuthConfig, list_auth_profiles
 
 # ── auth.py: list_auth_profiles ──────────────────────────────────
 
+
 class TestListAuthProfiles:
     def test_no_profiles_dir(self):
         with patch("crawler.auth.DEFAULT_PROFILES_DIR", Path("/nonexistent/path")):
@@ -37,6 +38,7 @@ class TestListAuthProfiles:
 
 # ── auth.py: load_auth_from_file with cookies ────────────────────
 
+
 class TestAuthLoadFromFileCookies:
     def test_load_cookies_from_file(self):
         from crawler.auth import load_auth_from_file
@@ -45,9 +47,7 @@ class TestAuthLoadFromFileCookies:
             "cookies_file": None,
             "headers": {"X-Test": "value"},
         }
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config, f)
             path = f.name
         try:
@@ -74,6 +74,7 @@ class TestAuthLoadFromFileCookies:
 
 # ── auth.py: resolved_storage_state with dict data ───────────────
 
+
 class TestAuthResolvedStorageStateDict:
     def test_storage_state_as_dict(self):
         state_data = {"cookies": [{"name": "a"}], "origins": []}
@@ -85,6 +86,7 @@ class TestAuthResolvedStorageStateDict:
 
 
 # ── mcp_server.py: search tool ───────────────────────────────────
+
 
 class TestSearchTool:
     @pytest.mark.asyncio
@@ -105,9 +107,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(query="test")
             data = json.loads(result)
             assert data["query"] == "test"
@@ -131,9 +131,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(
                 query="test",
                 time_range="week",
@@ -161,9 +159,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(query="test")
             data = json.loads(result)
             assert "Authentication failed" in data["error"]
@@ -186,9 +182,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(query="test")
             data = json.loads(result)
             assert "500" in data["error"]
@@ -205,9 +199,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(query="test")
             data = json.loads(result)
             assert "Request failed" in data["error"]
@@ -222,9 +214,7 @@ class TestSearchTool:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch(
-            "crawler.mcp_server._get_searxng_client", return_value=mock_client
-        ):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await search(query="test")
             data = json.loads(result)
             assert "Unexpected error" in data["error"]
@@ -232,27 +222,27 @@ class TestSearchTool:
 
 # ── mcp_server.py: _get_searxng_client ───────────────────────────
 
+
 class TestGetSearxngClient:
     def test_without_auth(self):
-        with patch("dotenv.load_dotenv"):
-            from crawler.mcp_server import _get_searxng_client
+        from crawler.search import _get_searxng_client
 
-        with patch("crawler.mcp_server.SEARXNG_USERNAME", None):
-            with patch("crawler.mcp_server.SEARXNG_PASSWORD", None):
-                client = _get_searxng_client()
-                assert isinstance(client, httpx.AsyncClient)
+        client = _get_searxng_client(base_url="http://localhost:8888")
+        assert isinstance(client, httpx.AsyncClient)
 
     def test_with_auth(self):
-        with patch("dotenv.load_dotenv"):
-            from crawler.mcp_server import _get_searxng_client
+        from crawler.search import _get_searxng_client
 
-        with patch("crawler.mcp_server.SEARXNG_USERNAME", "user"):
-            with patch("crawler.mcp_server.SEARXNG_PASSWORD", "pass"):
-                client = _get_searxng_client()
-                assert isinstance(client, httpx.AsyncClient)
+        client = _get_searxng_client(
+            base_url="http://localhost:8888",
+            username="user",
+            password="pass",
+        )
+        assert isinstance(client, httpx.AsyncClient)
 
 
 # ── mcp_server.py: main() ────────────────────────────────────────
+
 
 class TestMCPServerMain:
     def test_main_stdio(self):
@@ -263,7 +253,9 @@ class TestMCPServerMain:
             with patch("crawler.mcp_server.load_auth_from_env", return_value=None):
                 with patch(
                     "argparse.ArgumentParser.parse_args",
-                    return_value=MagicMock(transport="stdio", host="127.0.0.1", port=8000),
+                    return_value=MagicMock(
+                        transport="stdio", host="127.0.0.1", port=8000
+                    ),
                 ):
                     main()
                     mock_mcp.run.assert_called_once_with(transport="stdio")
@@ -292,12 +284,15 @@ class TestMCPServerMain:
             with patch("crawler.mcp_server.load_auth_from_env", return_value=auth):
                 with patch(
                     "argparse.ArgumentParser.parse_args",
-                    return_value=MagicMock(transport="stdio", host="127.0.0.1", port=8000),
+                    return_value=MagicMock(
+                        transport="stdio", host="127.0.0.1", port=8000
+                    ),
                 ):
                     main()
 
 
 # ── mcp_server.py: crawl_site with auth ──────────────────────────
+
 
 class TestMCPCrawlSiteAuth:
     @pytest.mark.asyncio
@@ -325,6 +320,7 @@ class TestMCPCrawlSiteAuth:
 
 # ── cli.py: _load_config branches ────────────────────────────────
 
+
 class TestLoadConfig:
     def test_local_env_found(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -345,9 +341,7 @@ class TestLoadConfig:
             (config_dir / ".env").write_text("SEARXNG_URL=http://config")
 
             with patch("crawler.cli.Path.cwd", return_value=Path("/nonexistent")):
-                with patch(
-                    "crawler.cli.CONFIG_ENV_FILE", config_dir / ".env"
-                ):
+                with patch("crawler.cli.CONFIG_ENV_FILE", config_dir / ".env"):
                     with patch("crawler.cli.load_dotenv") as mock_load:
                         from crawler.cli import _load_config
 
@@ -356,6 +350,7 @@ class TestLoadConfig:
 
 
 # ── cli.py: _run_search_async ────────────────────────────────────
+
 
 class TestRunSearchAsync:
     @pytest.mark.asyncio
@@ -373,6 +368,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -391,7 +387,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 0
 
@@ -410,6 +406,7 @@ class TestRunSearchAsync:
             categories=["general"],
             engines=["google"],
             max_results=5,
+            pageno=1,
             json_output=True,
             output=None,
             verbose=False,
@@ -428,7 +425,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 0
 
@@ -447,6 +444,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -465,7 +463,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 1
 
@@ -484,6 +482,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -502,7 +501,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 1
 
@@ -521,6 +520,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -533,7 +533,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 1
 
@@ -552,6 +552,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=False,
             output=None,
             verbose=False,
@@ -562,7 +563,7 @@ class TestRunSearchAsync:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+        with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
             result = await _run_search_async(args)
             assert result == 1
 
@@ -581,6 +582,7 @@ class TestRunSearchAsync:
             categories=None,
             engines=None,
             max_results=10,
+            pageno=1,
             json_output=True,
             output=None,
             verbose=False,
@@ -602,7 +604,7 @@ class TestRunSearchAsync:
             args.output = f.name
 
         try:
-            with patch("crawler.cli.httpx.AsyncClient", return_value=mock_client):
+            with patch("crawler.search.httpx.AsyncClient", return_value=mock_client):
                 result = await _run_search_async(args)
                 assert result == 0
             assert Path(args.output).exists()
@@ -611,6 +613,7 @@ class TestRunSearchAsync:
 
 
 # ── cli.py: search_main ──────────────────────────────────────────
+
 
 class TestSearchMainFunc:
     def test_search_main_success(self):
@@ -640,6 +643,7 @@ class TestSearchMainFunc:
 
 # ── cli.py: _parse_search_args and _run_crawl_async with auth ────
 
+
 class TestSearchArgs:
     def test_parse_search_args(self):
         with patch("dotenv.load_dotenv"):
@@ -653,16 +657,24 @@ class TestSearchArgs:
         with patch("dotenv.load_dotenv"):
             from crawler.cli import _parse_search_args
 
-        args = _parse_search_args([
-            "test",
-            "--time-range", "week",
-            "--categories", "general", "news",
-            "--engines", "google",
-            "--safesearch", "2",
-            "--max-results", "20",
-            "--json",
-            "-v",
-        ])
+        args = _parse_search_args(
+            [
+                "test",
+                "--time-range",
+                "week",
+                "--categories",
+                "general",
+                "news",
+                "--engines",
+                "google",
+                "--safesearch",
+                "2",
+                "--max-results",
+                "20",
+                "--json",
+                "-v",
+            ]
+        )
         assert args.time_range == "week"
         assert args.safesearch == 2
         assert args.max_results == 20
@@ -671,6 +683,7 @@ class TestSearchArgs:
 
 
 # ── cli.py: _run_capture_auth_async ──────────────────────────────
+
 
 class TestRunCaptureAuthAsync:
     @pytest.mark.asyncio
@@ -720,6 +733,7 @@ class TestRunCaptureAuthAsync:
 
 # ── references.py: ValueError in index ───────────────────────────
 
+
 class TestReferencesValueError:
     def test_invalid_index_skipped(self):
         from crawler.references import _parse_markdown_block
@@ -735,6 +749,7 @@ class TestReferencesValueError:
 
 # ── site.py: crawl_site sync wrapper ─────────────────────────────
 
+
 class TestSiteCrawlSync:
     def test_sync_wrapper_callable(self):
         from crawler.site import crawl_site
@@ -743,6 +758,7 @@ class TestSiteCrawlSync:
 
 
 # ── __init__.py: sync wrappers ────────────────────────────────────
+
 
 class TestInitSyncWrappers:
     def test_crawl_page_sync_callable(self):

@@ -163,10 +163,13 @@ async def capture_auth_state(
                 elapsed += grace_period
 
                 while elapsed < timeout:
+                    # Check if page/browser was closed
+                    if page.is_closed():
+                        LOGGER.info("Browser closed by user")
+                        break
                     try:
                         current_url = page.url
                     except Exception:
-                        # Browser was closed
                         break
 
                     if pattern.search(current_url):
@@ -183,11 +186,13 @@ async def capture_auth_state(
                 elapsed = 0
                 poll_interval = 0.5
                 while elapsed < timeout:
+                    # Check if page/browser was closed
+                    if page.is_closed():
+                        LOGGER.info("Browser closed by user")
+                        break
                     try:
-                        # Check if page/context is still alive
                         _ = page.url
                     except Exception:
-
                         break
 
                     await asyncio.sleep(poll_interval)

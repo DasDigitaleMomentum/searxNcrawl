@@ -197,10 +197,23 @@ def _build_auth_config(
     """Build an AuthConfig from MCP tool parameters, falling back to env vars."""
     # Explicit parameters take precedence
     if any([cookies, headers, storage_state, auth_profile]):
+        # When auth_profile is given without explicit storage_state,
+        # auto-resolve storage_state.json inside the profile directory.
+        # crawl4ai needs storage_state for cookie injection — it does
+        # not use user_data_dir as a Playwright persistent context.
+        resolved_storage = storage_state
+        if auth_profile and not storage_state:
+            from pathlib import Path
+            ss_path = Path(auth_profile) / "storage_state.json"
+            if ss_path.is_file():
+                resolved_storage = str(ss_path)
+                logging.info(
+                    "Resolved storage state from profile: %s", resolved_storage
+                )
         return AuthConfig(
             cookies=cookies,
             headers=headers,
-            storage_state=storage_state,
+            storage_state=resolved_storage,
             user_data_dir=auth_profile,
         )
     # Fall back to environment variables

@@ -242,10 +242,19 @@ def _build_cli_auth(args: argparse.Namespace) -> Optional[AuthConfig]:
 
     # Explicit CLI args take precedence
     if any([cookies, headers_dict, storage_state, auth_profile]):
+        # Auto-resolve storage_state.json from profile directory
+        resolved_storage = storage_state
+        if auth_profile and not storage_state:
+            profile_ss = Path(auth_profile) / "storage_state.json"
+            if profile_ss.is_file():
+                resolved_storage = str(profile_ss)
+                logging.info(
+                    "Resolved storage state from profile: %s", resolved_storage
+                )
         return AuthConfig(
             cookies=cookies,
             headers=headers_dict,
-            storage_state=storage_state,
+            storage_state=resolved_storage,
             user_data_dir=auth_profile,
         )
 

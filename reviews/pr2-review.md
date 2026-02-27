@@ -187,3 +187,77 @@ python -m crawler.mcp_server --help
 # Optional targeted test runs if suite is large
 pytest -q -k "auth or mcp or cli"
 ```
+
+---
+
+## Re-check after latest PR #2 follow-up updates
+
+This section records a fresh status check against the parity and implementation
+expectations documented above.
+
+### Current status snapshot
+
+1. **Auth feature surface is still not present in active entrypoints**
+   - `crawler/cli.py` currently exposes crawl/search arguments, but does not
+     expose auth-focused options from the review goals (`--cookies`,
+     `--header`, `--storage-state`, `--auth-profile`).
+   - `crawler/mcp_server.py` `crawl`/`crawl_site` tools currently do not accept
+     auth params (cookies/headers/storage state/profile).
+   - `crawler/__init__.py` convenience APIs currently expose `config` and
+     `concurrency`, but not profile/cookie/header/storage-state convenience
+     inputs.
+
+2. **SPA parity remains open**
+   - CLI does not currently expose `--delay` / `--wait-until` knobs in the
+     parser.
+   - MCP tools do not expose `delay` / `wait_until`.
+   - Python convenience API does not expose delay/wait overrides directly.
+
+3. **Capture-auth / auth-profile operational path is still open**
+   - No active `capture-auth` subcommand is currently wired in CLI.
+   - No MCP tool for auth profile discovery is currently wired.
+
+### Open points requiring action (detailed)
+
+1. **Re-introduce/complete auth model + loaders (blocking)**
+   - Add or restore explicit auth config model (cookies, headers,
+     storage_state, auth_profile/user_data_dir).
+   - Implement one normalization path for precedence:
+     explicit args > profile > environment defaults.
+   - Ensure config assembly is reusable by CLI, MCP, and Python API.
+
+2. **Restore CLI parity (blocking)**
+   - Extend `crawler/cli.py` crawl parser with auth args:
+     `--cookies`, repeated `--header`, `--storage-state`, `--auth-profile`
+     (and `--user-data-dir` if separately modeled).
+   - Add SPA args: `--delay`, `--wait-until`.
+   - Thread parsed values into shared config builder before crawl execution.
+
+3. **Restore MCP parity (blocking)**
+   - Extend `crawler/mcp_server.py` `crawl` and `crawl_site` signatures with
+     auth and SPA params.
+   - Forward these params into the same shared normalization path used by CLI.
+   - Update tool docstrings/examples to document argument semantics and
+     precedence.
+
+4. **Restore Python convenience API parity (blocking)**
+   - Extend `crawl_page(_async)`, `crawl_pages(_async)`, and `crawl_site(_async)`
+     with optional auth + SPA convenience args.
+   - Preserve backward compatibility by keeping existing args optional and
+     defaults unchanged.
+
+5. **Re-enable interactive auth workflow (high priority)**
+   - Re-introduce `capture-auth` CLI flow for login-state capture.
+   - Add profile listing utility (CLI and/or MCP) to discover saved auth
+     profiles.
+
+6. **Add regression coverage focused on parity contracts (high priority)**
+   - CLI parsing tests for new auth + SPA args.
+   - MCP tests validating signature acceptance and forwarding behavior.
+   - API tests validating equivalent effective config across CLI/MCP/API inputs.
+
+7. **Update end-user documentation (required before close)**
+   - README sections for CLI, Python API, and MCP parameters must each include
+     auth + SPA usage examples.
+   - Add one shared precedence note (explicit > profile > env) referenced from
+     all entrypoint docs.

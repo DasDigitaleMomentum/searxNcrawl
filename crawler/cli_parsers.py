@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from typing import Callable, List, Optional
 
 
@@ -202,7 +203,7 @@ Examples:
 
 
 def _normalize_crawl_argv(argv: Optional[List[str]]) -> List[str]:
-    effective_argv = list(argv) if argv is not None else []
+    effective_argv = list(argv) if argv is not None else list(sys.argv[1:])
     if not effective_argv:
         return ["crawl"]
 

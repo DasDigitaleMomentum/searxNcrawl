@@ -351,6 +351,15 @@ class TestParseCrawlArgs:
         )
         assert args.storage_state == "state.json"
 
+    def test_none_argv_uses_sys_argv(self):
+        with patch("sys.argv", ["crawl", "https://example.com"]):
+            args = _parse_crawl_args()
+        assert args.urls == ["https://example.com"]
+
+    def test_empty_argv_raises(self):
+        with pytest.raises(SystemExit):
+            _parse_crawl_args([])
+
 
 class TestParseCaptureAuthArgs:
     def test_basic(self):

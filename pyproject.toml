@@ -1,6 +1,6 @@
 [project]
 name = "searxNcrawl"
-version = "0.1.0"
+version = "0.2.1"
 description = "searxNcrawl web crawler with markdown extraction - no DB, no enrichment, just crawling."
 readme = "README.md"
 requires-python = ">=3.10"

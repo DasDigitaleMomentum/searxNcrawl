@@ -6,7 +6,7 @@ This project is published as **searxNcrawl** at https://github.com/DasDigitaleMo
 
 Compared to plain Crawl4AI usage, searxNcrawl provides a **proven, production-tested crawl configuration** for documentation-heavy sites, optimized for clean, model-ready Markdown with less noise and better token efficiency.
 
-It also includes built-in **markdown deduplication** and early support for **authenticated crawling** (WIP) via Playwright storage state.
+It also includes built-in **markdown deduplication** and early support for **authenticated crawling** (WIP) via Playwright storage state — including a practical CDP export flow for real Chrome/Chromium login sessions.
 
 ## Features
 
@@ -24,7 +24,8 @@ It also includes built-in **markdown deduplication** and early support for **aut
 
 ### Authenticated Crawling (WIP)
 - **Storage-state based auth** - Crawl logged-in pages using Playwright `storage_state`
-- **Session capture tool** - `crawl-capture` for manual login and state export
+- **Session capture tool** - `crawl-capture` for manual login capture and CDP session export
+- **CDP session discovery** - List active browser sessions and select one directly in CLI
 - **Current status: WIP** - Auth flow works, but UX/flow is not final yet
 
 ### Web Search
@@ -34,7 +35,7 @@ It also includes built-in **markdown deduplication** and early support for **aut
 
 ### CLI Tools
 - **`crawl`** - Crawl pages from the command line
-- **`crawl-capture`** - Isolated manual-login session capture to storage state
+- **`crawl-capture`** - Manual login capture + CDP session list/select/export
 - **`search`** - Search the web via SearXNG
 - **Global installation** - Available system-wide after `pip install -e .`
 
@@ -546,7 +547,11 @@ when removal ratios are unusually high.
 
 ### Session Capture (`crawl-capture`)
 
-Use `crawl-capture` to create a Playwright `storage_state` file after manual login.
+`crawl-capture` supports **two user-friendly ways** to produce a Playwright `storage_state` file.
+
+#### Option A — Manual login flow (built-in browser)
+
+Use this when your identity provider allows login in Playwright-launched browsers.
 
 ```bash
 # Capture after login redirect matches completion URL regex
@@ -563,14 +568,59 @@ crawl-capture \
   --overwrite
 ```
 
-Explicit capture outcomes:
+#### Option B — Export from running Chrome/Chromium via CDP
+
+Use this when providers (e.g. Google) reject automated-login browsers.
+
+1) Start your real browser with remote debugging enabled:
+
+```bash
+# Linux example
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.chrome-cdp-searxncrawl"
+```
+
+2) Log in manually to your target app in that browser.
+
+3) List selectable sessions:
+
+```bash
+crawl-capture --cdp-url http://127.0.0.1:9222 --list-sessions
+```
+
+4) Export by explicit session index:
+
+```bash
+crawl-capture \
+  --cdp-url http://127.0.0.1:9222 \
+  --cdp-session 2 \
+  --output ./state.json
+```
+
+Or let CLI selection guide you interactively:
+
+```bash
+crawl-capture \
+  --cdp-url http://127.0.0.1:9222 \
+  --list-sessions \
+  --select \
+  --output ./state.json
+```
+
+After capture/export, use the file for authenticated crawling:
+
+```bash
+crawl https://example.com/private --storage-state ./state.json
+```
+
+Explicit outcomes:
 - `success` (exit 0): storage state written.
-- `timeout` (exit 2): completion condition not reached in time.
-- `abort` (exit 130): browser/session closed before completion.
+- `timeout` (exit 2): completion condition not reached in time (manual flow only).
+- `abort` (exit 130): browser/session closed before completion (manual flow only).
 
 Safety notes:
 - Keep `storage_state` files out of version control.
-- Capture is intentionally isolated from standard `crawl` / `crawl_site` execution paths.
+- Capture/export is intentionally isolated from standard `crawl` / `crawl_site` execution paths.
+- If multiple tabs share one browser context/profile, they share the same exported session state.
 
 ### search
 

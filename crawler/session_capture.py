@@ -31,6 +31,16 @@ class CaptureResult:
     final_url: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class CdpSessionEntry:
+    """A selectable CDP session candidate discovered in a running browser."""
+
+    context_index: int
+    page_index: Optional[int]
+    url: str
+    title: Optional[str] = None
+
+
 ConfirmCallback = Callable[[str], bool | Awaitable[bool]]
 
 
@@ -64,6 +74,137 @@ def _write_storage_state(path: Path, payload: Any) -> None:
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
         raise SessionCaptureError("Written storage_state is not a JSON object")
+
+
+def _normalize_cdp_url(cdp_url: str) -> str:
+    if not cdp_url or not cdp_url.strip():
+        raise SessionCaptureConfigError("cdp_url must be a non-empty URL")
+    return cdp_url.strip()
+
+
+async def list_cdp_sessions_async(cdp_url: str) -> list[CdpSessionEntry]:
+    """List selectable sessions from a running browser via CDP."""
+    target_url = _normalize_cdp_url(cdp_url)
+
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise SessionCaptureError(
+            "Playwright is required for CDP session listing. Install browsers with 'playwright install chromium'."
+        ) from exc
+
+    sessions: list[CdpSessionEntry] = []
+
+    async with async_playwright() as playwright:
+        try:
+            browser = await playwright.chromium.connect_over_cdp(target_url)
+        except Exception as exc:  # pragma: no cover - runtime/network dependent
+            raise SessionCaptureError(
+                f"Failed to connect to CDP endpoint: {target_url}"
+            ) from exc
+
+        try:
+            for context_index, context in enumerate(browser.contexts):
+                pages = list(context.pages)
+                if not pages:
+                    sessions.append(
+                        CdpSessionEntry(
+                            context_index=context_index,
+                            page_index=None,
+                            url="",
+                            title=None,
+                        )
+                    )
+                    continue
+
+                for page_index, page in enumerate(pages):
+                    title: Optional[str] = None
+                    try:
+                        title = await page.title()
+                    except Exception:
+                        title = None
+
+                    sessions.append(
+                        CdpSessionEntry(
+                            context_index=context_index,
+                            page_index=page_index,
+                            url=page.url or "",
+                            title=title,
+                        )
+                    )
+        finally:
+            await browser.close()
+
+    return sessions
+
+
+async def export_cdp_storage_state_async(
+    output_path: str,
+    *,
+    cdp_url: str,
+    context_index: int,
+    overwrite: bool = False,
+) -> CaptureResult:
+    """Export storage_state from an existing CDP browser context."""
+    if not output_path or not str(output_path).strip():
+        raise SessionCaptureConfigError("output_path must be a non-empty path")
+
+    if context_index < 0:
+        raise SessionCaptureConfigError(
+            "context_index must be greater than or equal to 0"
+        )
+
+    target_url = _normalize_cdp_url(cdp_url)
+    output = _canonicalize_output_path(output_path)
+    _validate_output_target(output, overwrite=overwrite)
+
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise SessionCaptureError(
+            "Playwright is required for CDP export. Install browsers with 'playwright install chromium'."
+        ) from exc
+
+    final_url: Optional[str] = None
+
+    async with async_playwright() as playwright:
+        try:
+            browser = await playwright.chromium.connect_over_cdp(target_url)
+        except Exception as exc:  # pragma: no cover - runtime/network dependent
+            raise SessionCaptureError(
+                f"Failed to connect to CDP endpoint: {target_url}"
+            ) from exc
+
+        try:
+            contexts = list(browser.contexts)
+            if not contexts:
+                raise SessionCaptureError(
+                    f"No browser contexts available at CDP endpoint: {target_url}"
+                )
+
+            if context_index >= len(contexts):
+                raise SessionCaptureConfigError(
+                    "context_index out of range: "
+                    f"{context_index} (available: 0..{len(contexts) - 1})"
+                )
+
+            context = contexts[context_index]
+            if context.pages:
+                final_url = context.pages[0].url or None
+
+            _write_storage_state(output, await context.storage_state())
+        finally:
+            await browser.close()
+
+    return CaptureResult(
+        status="success",
+        message=(
+            "Exported storage_state from running CDP browser "
+            f"(context={context_index})."
+        ),
+        storage_state_path=str(output),
+        final_url=final_url,
+    )
 
 
 async def _execute_capture_flow(

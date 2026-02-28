@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.models import CrawlResult, CrawlResultContainer
@@ -44,7 +44,7 @@ from crawl4ai.models import CrawlResult, CrawlResultContainer
 from .builder import build_document_from_result
 from .config import RunConfigOverrides, build_markdown_run_config
 from .document import CrawledDocument, Reference
-from .site import SiteCrawlResult, crawl_site, crawl_site_async
+from .site import SiteCrawlResult, crawl_site_async as _crawl_site_async
 
 __all__ = [
     # Document types
@@ -116,13 +116,13 @@ async def crawl_page_async(
 
 
 async def _extract_first_result(container: Any) -> Optional[CrawlResult]:
-    """Extract first CrawlResult from any crawl4ai return shape."""
+    """Extract first result item from crawl4ai return shapes."""
     if isinstance(container, CrawlResult):
         return container
 
     if isinstance(container, CrawlResultContainer):
         for item in container:
-            return item
+            return cast(CrawlResult, item)
         return None
 
     if isinstance(container, list):
@@ -131,7 +131,9 @@ async def _extract_first_result(container: Any) -> Optional[CrawlResult]:
                 return item
             if isinstance(item, CrawlResultContainer):
                 for sub_item in item:
-                    return sub_item
+                    return cast(CrawlResult, sub_item)
+        if container:
+            return cast(CrawlResult, container[0])
         return None
 
     if inspect.isasyncgen(container):
@@ -140,8 +142,8 @@ async def _extract_first_result(container: Any) -> Optional[CrawlResult]:
                 return item
             if isinstance(item, CrawlResultContainer):
                 for sub_item in item:
-                    return sub_item
-            return item
+                    return cast(CrawlResult, sub_item)
+            return cast(CrawlResult, item)
 
     return None
 
@@ -213,6 +215,44 @@ def crawl_pages(
             urls,
             config=config,
             concurrency=concurrency,
+            dedup_mode=dedup_mode,
+        )
+    )
+
+
+async def crawl_site_async(
+    url: str,
+    *,
+    max_depth: int = 2,
+    max_pages: int = 25,
+    include_subdomains: bool = False,
+    dedup_mode: str = "exact",
+) -> SiteCrawlResult:
+    """Async wrapper that forwards dedup mode to site crawl."""
+    return await _crawl_site_async(
+        url,
+        max_depth=max_depth,
+        max_pages=max_pages,
+        include_subdomains=include_subdomains,
+        dedup_mode=dedup_mode,
+    )
+
+
+def crawl_site(
+    url: str,
+    *,
+    max_depth: int = 2,
+    max_pages: int = 25,
+    include_subdomains: bool = False,
+    dedup_mode: str = "exact",
+) -> SiteCrawlResult:
+    """Synchronous wrapper for crawl_site_async."""
+    return asyncio.run(
+        crawl_site_async(
+            url,
+            max_depth=max_depth,
+            max_pages=max_pages,
+            include_subdomains=include_subdomains,
             dedup_mode=dedup_mode,
         )
     )

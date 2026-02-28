@@ -67,6 +67,14 @@ This module groups the internal data pipeline that turns raw Crawl4AI results in
 - Behavior depends on crawl result richness (presence/absence of markdown/html/metadata fields).
 - Uses `build_markdown_generator` fallback from config module for resilience when Crawl4AI output is incomplete.
 
+## Dedup + Guardrail Semantics
+
+- Dedup is applied per-document in `build_document_from_result` and does not perform any cross-document dedup.
+- Default mode remains `exact` (backward compatible); `off` keeps markdown unchanged.
+- Builder metadata includes dedup metrics (`dedup_sections_total`, `dedup_sections_removed`, `dedup_chars_removed`, `dedup_mode`).
+- Phase-2 rollout guardrails are conservative and non-destructive: they only annotate metadata and emit warnings for suspiciously high section-removal rates in active dedup mode.
+- Guardrails are mode-aware: removal-rate warnings are not emitted when dedup mode is `off`.
+
 ## Inventory Notes
 
 - **Coverage**: full

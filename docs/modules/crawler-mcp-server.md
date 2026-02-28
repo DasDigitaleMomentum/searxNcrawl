@@ -73,9 +73,17 @@ version: 1.0
 ## Dedup Parameters and Metadata
 
 - `crawl` and `crawl_site` expose `dedup_mode` with values `exact|off` and default `exact`.
+- `crawl` and `crawl_site` expose `storage_state` (optional path to Playwright storage state JSON) for authenticated crawling.
 - `exact` is the backward-compatible default and keeps dedup active for intra-document exact duplicates.
 - `off` disables dedup for that request only.
 - JSON output forwards builder metadata unchanged, including dedup stats and guardrail indicators when present (for example `dedup_guardrail_triggered`).
+
+## Auth Surface (Phase 2 MVP)
+
+- MCP tool auth input is MVP-only: `storage_state`.
+- Tool handlers forward auth into package APIs via `auth={"storage_state": ...}` and rely on shared resolver behavior for validation/errors.
+- Session capture and profile ergonomics are deferred to later phases.
+- No-drift invariant: MCP auth surface changes do not alter crawl config defaults.
 
 ## Inventory Notes
 

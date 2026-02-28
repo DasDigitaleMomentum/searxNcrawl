@@ -63,6 +63,7 @@ def _load_config() -> None:
 _load_config()
 
 from .document import CrawledDocument
+from .session_capture import capture_session_async
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -247,6 +248,9 @@ Examples:
 
   # Clean output without links
   crawl https://example.com --remove-links
+
+  # Crawl with authenticated browser state
+  crawl https://example.com --storage-state ./state.json
 """,
     )
 
@@ -291,6 +295,12 @@ Examples:
         help="Concurrent crawls for multiple URLs (default: 3)",
     )
     parser.add_argument(
+        "--storage-state",
+        type=str,
+        default=None,
+        help="Path to Playwright storage_state JSON for authenticated crawling",
+    )
+    parser.add_argument(
         "--dedup-mode",
         type=str,
         choices=["exact", "off"],
@@ -323,6 +333,11 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
     from . import crawl_page_async, crawl_pages_async, crawl_site_async
 
     docs: List[CrawledDocument] = []
+    auth = (
+        {"storage_state": args.storage_state}
+        if getattr(args, "storage_state", None)
+        else None
+    )
 
     if args.site:
         if len(args.urls) > 1:
@@ -341,6 +356,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             max_pages=args.max_pages,
             include_subdomains=args.include_subdomains,
             dedup_mode=args.dedup_mode,
+            auth=auth,
         )
         docs = result.documents
         logging.info(
@@ -352,7 +368,11 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
 
     elif len(args.urls) == 1:
         logging.info("Crawling: %s", args.urls[0])
-        doc = await crawl_page_async(args.urls[0], dedup_mode=args.dedup_mode)
+        doc = await crawl_page_async(
+            args.urls[0],
+            dedup_mode=args.dedup_mode,
+            auth=auth,
+        )
         docs = [doc]
 
     else:
@@ -361,6 +381,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             args.urls,
             concurrency=args.concurrency,
             dedup_mode=args.dedup_mode,
+            auth=auth,
         )
 
     # Filter out failed docs for reporting
@@ -392,6 +413,109 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         return asyncio.run(_run_crawl_async(args))
+    except KeyboardInterrupt:
+        logging.info("Interrupted")
+        return 130
+    except Exception as exc:
+        logging.error("Error: %s", exc)
+        if args.verbose:
+            logging.exception("Full traceback:")
+        return 1
+
+
+# =============================================================================
+# CAPTURE COMMAND
+# =============================================================================
+
+
+def _parse_capture_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="crawl-capture",
+        description="Capture Playwright storage_state via manual login.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  # Open login page and capture when redirected to dashboard
+  crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/dashboard.*' --output ./state.json
+
+  # Overwrite existing state file
+  crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/app.*' --output ./state.json --overwrite
+""",
+    )
+
+    parser.add_argument(
+        "--start-url",
+        type=str,
+        default=None,
+        help="Optional URL to open before manual login",
+    )
+    parser.add_argument(
+        "--completion-url",
+        type=str,
+        required=True,
+        help="Regex pattern that marks successful capture when current URL matches",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Target path for captured storage_state JSON",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        help="Capture timeout in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing storage_state file",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run browser headless (default: headed for manual login)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+
+    return parser.parse_args(argv)
+
+
+async def _run_capture_async(args: argparse.Namespace) -> int:
+    result = await capture_session_async(
+        args.output,
+        completion_url_pattern=args.completion_url,
+        start_url=args.start_url,
+        timeout_seconds=args.timeout,
+        overwrite=args.overwrite,
+        headless=args.headless,
+    )
+
+    if result.status == "success":
+        logging.info("Capture success: %s", result.storage_state_path)
+        return 0
+
+    if result.status == "timeout":
+        logging.error("Capture timeout: %s", result.message)
+        return 2
+
+    logging.warning("Capture aborted: %s", result.message)
+    return 130
+
+
+def capture_main(argv: Optional[List[str]] = None) -> int:
+    """CLI entry point for isolated session capture."""
+    args = _parse_capture_args(argv)
+    _setup_logging(args.verbose)
+
+    try:
+        return asyncio.run(_run_capture_async(args))
     except KeyboardInterrupt:
         logging.info("Interrupted")
         return 130

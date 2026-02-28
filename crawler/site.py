@@ -15,6 +15,7 @@ from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChai
 from crawl4ai.deep_crawling.filters import DomainFilter
 
 from .builder import build_document_from_result
+from .auth import AuthInput, resolve_auth
 from .config import build_markdown_run_config
 from .document import CrawledDocument
 
@@ -66,6 +67,7 @@ async def crawl_site_async(
     max_pages: int = 25,
     include_subdomains: bool = False,
     dedup_mode: str = "exact",
+    auth: Optional[AuthInput] = None,
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -92,7 +94,7 @@ async def crawl_site_async(
             allowed_hosts.add(registrable)
         filters.append(DomainFilter(allowed_domains=sorted(allowed_hosts)))
 
-    filter_chain = FilterChain(filters) if filters else None
+    filter_chain = FilterChain(filters)
 
     # Configure the crawl
     config = build_markdown_run_config()
@@ -118,7 +120,11 @@ async def crawl_site_async(
     seen_urls: Set[str] = set()
     errors: List[Dict[str, str]] = []
 
-    browser_cfg = BrowserConfig(use_persistent_context=False)
+    resolved_auth = resolve_auth(auth)
+    browser_cfg = BrowserConfig(
+        use_persistent_context=False,
+        storage_state=resolved_auth.storage_state if resolved_auth else None,
+    )
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         crawl_result = await crawler.arun(url=seed_url, config=config)
@@ -181,6 +187,7 @@ def crawl_site(
     max_pages: int = 25,
     include_subdomains: bool = False,
     dedup_mode: str = "exact",
+    auth: Optional[AuthInput] = None,
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -190,6 +197,7 @@ def crawl_site(
             max_pages=max_pages,
             include_subdomains=include_subdomains,
             dedup_mode=dedup_mode,
+            auth=auth,
         )
     )
 

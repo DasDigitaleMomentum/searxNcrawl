@@ -70,7 +70,10 @@ version: 1.0
   - `SEARXNG_URL` (default `http://localhost:8888`) (`crawler/cli.py:494`)
   - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/cli.py:495`-`crawler/cli.py:496`)
 - `.env` search order and auto-seeding behavior documented in `_load_config` (`crawler/cli.py:24`-`crawler/cli.py:61`).
-- CLI flags include `--json`, `--remove-links`, `--site`, depth/page/concurrency controls.
+- Crawl CLI exposes `--dedup-mode` with choices `exact|off` (default: `exact`).
+- `--dedup-mode exact` preserves backward-compatible default behavior and enables intra-document exact dedup in the document pipeline.
+- `--dedup-mode off` disables markdown dedup for a crawl request without changing other pipeline behavior.
+- CLI flags also include `--json`, `--remove-links`, `--site`, and depth/page/concurrency controls.
 
 ## Inventory Notes
 

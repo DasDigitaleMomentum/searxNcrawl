@@ -66,3 +66,8 @@ version: 1.0
 
 - **Coverage**: full
 - **Notes**: Includes all constants, dataclasses, and factories in `crawler/config.py`.
+
+## Phase-2 Stability Note
+
+- Selector and extraction configuration remain unchanged in dedup Phase 2.
+- `MAIN_SELECTORS`, `EXCLUDED_SELECTORS`, `build_markdown_run_config`, and `build_discovery_run_config` are intentionally not modified by dedup surface/guardrail rollout work.

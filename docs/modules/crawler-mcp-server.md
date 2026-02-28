@@ -70,6 +70,13 @@ version: 1.0
   - `--transport` (`stdio`/`http`) (`crawler/mcp_server.py:485`)
   - `--host` and `--port` for HTTP mode (`crawler/mcp_server.py:491`, `crawler/mcp_server.py:496`)
 
+## Dedup Parameters and Metadata
+
+- `crawl` and `crawl_site` expose `dedup_mode` with values `exact|off` and default `exact`.
+- `exact` is the backward-compatible default and keeps dedup active for intra-document exact duplicates.
+- `off` disables dedup for that request only.
+- JSON output forwards builder metadata unchanged, including dedup stats and guardrail indicators when present (for example `dedup_guardrail_triggered`).
+
 ## Inventory Notes
 
 - **Coverage**: full

@@ -89,16 +89,17 @@ def _format_timestamp() -> str:
 
 def _strip_markdown_links(text: str) -> str:
     """Remove markdown links from text, keeping only the link text.
-    
+
     Converts [text](url) to text and removes standalone URLs.
     """
     import re
+
     # Replace [text](url) with just text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     # Remove standalone URLs (http/https)
-    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r"https?://\S+", "", text)
     # Clean up any double spaces left behind
-    text = re.sub(r'  +', ' ', text)
+    text = re.sub(r"  +", " ", text)
     return text
 
 
@@ -190,6 +191,7 @@ async def crawl(
     output_format: str = "markdown",
     concurrency: int = 3,
     remove_links: bool = False,
+    dedup_mode: str = "exact",
 ):
     """
     Crawl one or more web pages and extract their content as markdown.
@@ -201,6 +203,7 @@ async def crawl(
             - json: Full JSON with metadata, references, and statistics
         concurrency: Maximum concurrent crawls (default: 3)
         remove_links: Remove all links from the markdown output (default: false)
+        dedup_mode: Markdown dedup mode - "exact" (default) or "off"
 
     Returns:
         Crawled content in the specified format.
@@ -230,7 +233,7 @@ async def crawl(
 
     if len(urls) == 1:
         try:
-            doc = await crawl_page_async(urls[0])
+            doc = await crawl_page_async(urls[0], dedup_mode=dedup_mode)
             docs = [doc]
         except Exception as exc:
             docs = [
@@ -243,7 +246,11 @@ async def crawl(
                 )
             ]
     else:
-        docs = await crawl_pages_async(urls, concurrency=concurrency)
+        docs = await crawl_pages_async(
+            urls,
+            concurrency=concurrency,
+            dedup_mode=dedup_mode,
+        )
 
     successful = sum(1 for d in docs if d.status == "success")
     LOGGER.info("Completed: %d/%d successful", successful, len(docs))
@@ -259,6 +266,7 @@ async def crawl_site(
     include_subdomains: bool = False,
     output_format: str = "markdown",
     remove_links: bool = False,
+    dedup_mode: str = "exact",
 ):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
@@ -272,6 +280,7 @@ async def crawl_site(
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and crawl statistics
         remove_links: Remove all links from the markdown output (default: false)
+        dedup_mode: Markdown dedup mode - "exact" (default) or "off"
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -312,6 +321,7 @@ async def crawl_site(
         max_depth=max_depth,
         max_pages=max_pages,
         include_subdomains=include_subdomains,
+        dedup_mode=dedup_mode,
     )
 
     LOGGER.info(
@@ -321,7 +331,9 @@ async def crawl_site(
         result.stats.get("failed_pages", 0),
     )
 
-    return _format_output(result.documents, fmt, stats=result.stats, remove_links=remove_links)
+    return _format_output(
+        result.documents, fmt, stats=result.stats, remove_links=remove_links
+    )
 
 
 # =============================================================================

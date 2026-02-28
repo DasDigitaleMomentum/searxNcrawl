@@ -9,10 +9,13 @@ from crawl4ai.models import CrawlResult, MarkdownGenerationResult
 
 from .config import build_markdown_generator
 from .document import CrawledDocument
+from .markdown_dedup import dedup_markdown
 from .references import parse_references
 
 
-def build_document_from_result(result: CrawlResult) -> CrawledDocument:
+def build_document_from_result(
+    result: CrawlResult, *, dedup_mode: str = "exact"
+) -> CrawledDocument:
     """Convert a Crawl4AI CrawlResult into our internal representation."""
 
     # Prepare metadata first to get URLs
@@ -53,10 +56,11 @@ def build_document_from_result(result: CrawlResult) -> CrawledDocument:
         raw_markdown = primary_markdown
     if not primary_markdown.strip():
         primary_markdown = raw_markdown
-    cleaned_markdown = primary_markdown
+    cleaned_markdown, dedup_stats = dedup_markdown(primary_markdown, mode=dedup_mode)
 
     # Update metadata with stats
     metadata.update(_prepare_metadata(result, raw_markdown, fit_markdown))
+    metadata.update(dedup_stats)
     references = parse_references(markdown.references_markdown or "", result.links)
 
     return CrawledDocument(

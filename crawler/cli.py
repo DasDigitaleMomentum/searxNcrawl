@@ -23,11 +23,11 @@ CONFIG_ENV_FILE = CONFIG_DIR / ".env"
 
 def _load_config() -> None:
     """Load .env configuration with fallback to user config directory.
-    
+
     Search order:
     1. .env in current working directory
     2. ~/.config/searxncrawl/.env
-    
+
     If neither exists and .env.example is found in the package directory,
     it will be copied to ~/.config/searxncrawl/.env as a starting point.
     """
@@ -36,16 +36,16 @@ def _load_config() -> None:
     if local_env.is_file():
         load_dotenv(local_env)
         return
-    
+
     # Second, try user config directory
     if CONFIG_ENV_FILE.is_file():
         load_dotenv(CONFIG_ENV_FILE)
         return
-    
+
     # No .env found - try to create config from .env.example
     package_dir = Path(__file__).parent.parent
     example_file = package_dir / ".env.example"
-    
+
     if example_file.is_file():
         try:
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -77,40 +77,40 @@ def _setup_logging(verbose: bool) -> None:
 def _strip_markdown_links(text: str) -> str:
     """Remove markdown links from text, keeping only the link text."""
     # Replace [text](url) with just text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     # Remove standalone URLs (http/https)
-    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r"https?://\S+", "", text)
     # Clean up any double spaces left behind
-    text = re.sub(r'  +', ' ', text)
+    text = re.sub(r"  +", " ", text)
     return text
 
 
 def _format_search_markdown(data: Dict[str, Any]) -> str:
     """Format search results as markdown.
-    
+
     Example output:
     # Search: python tutorials
-    
+
     ## 1. Python Tutorial - W3Schools
     https://www.w3schools.com/python/
-    
+
     Well organized tutorials with examples...
-    
+
     ---
     """
     lines = []
     query = data.get("query", "")
     results = data.get("results", [])
-    
+
     lines.append(f"# Search: {query}")
     lines.append(f"_Found {len(results)} results_")
     lines.append("")
-    
+
     for i, result in enumerate(results, 1):
         title = result.get("title", "Untitled")
         url = result.get("url", "")
         content = result.get("content", "")
-        
+
         lines.append(f"## {i}. {title}")
         lines.append(url)
         lines.append("")
@@ -119,13 +119,13 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
             lines.append("")
         lines.append("---")
         lines.append("")
-    
+
     # Add suggestions if available
     suggestions = data.get("suggestions", [])
     if suggestions:
         lines.append("**Related searches:** " + ", ".join(suggestions[:5]))
         lines.append("")
-    
+
     return "\n".join(lines)
 
 
@@ -291,6 +291,13 @@ Examples:
         help="Concurrent crawls for multiple URLs (default: 3)",
     )
     parser.add_argument(
+        "--dedup-mode",
+        type=str,
+        choices=["exact", "off"],
+        default="exact",
+        help="Markdown dedup mode (default: exact)",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -333,6 +340,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             max_depth=args.max_depth,
             max_pages=args.max_pages,
             include_subdomains=args.include_subdomains,
+            dedup_mode=args.dedup_mode,
         )
         docs = result.documents
         logging.info(
@@ -344,7 +352,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
 
     elif len(args.urls) == 1:
         logging.info("Crawling: %s", args.urls[0])
-        doc = await crawl_page_async(args.urls[0])
+        doc = await crawl_page_async(args.urls[0], dedup_mode=args.dedup_mode)
         docs = [doc]
 
     else:
@@ -352,6 +360,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
         docs = await crawl_pages_async(
             args.urls,
             concurrency=args.concurrency,
+            dedup_mode=args.dedup_mode,
         )
 
     # Filter out failed docs for reporting

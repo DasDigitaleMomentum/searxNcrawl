@@ -1,21 +1,31 @@
 # searxNcrawl
 
-searxNcrawl is a minimal MCP server and CLI toolkit for crawling and search with searxng, a privacy-respecting metasearch engine, that delivers model‑ready Markdown with minimal overhead, saving tokens in coding workflows and replacing generic webfetch tools.
+searxNcrawl is a minimal MCP server and CLI toolkit for search and crawling, built on top of Crawl4AI and SearXNG.
 
 This project is published as **searxNcrawl** at https://github.com/DasDigitaleMomentum/searxNcrawl and is maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. It is the successor to `searxng-mcp` https://github.com/tisDDM/searxng-mcp  (which should be marked deprecated).
 
-Extracted from the l4l-crawl project - the core crawl4ai configuration that took forever to get right.
+Compared to plain Crawl4AI usage, searxNcrawl provides a **proven, production-tested crawl configuration** for documentation-heavy sites, optimized for clean, model-ready Markdown with less noise and better token efficiency.
+
+It also includes built-in **markdown deduplication** and early support for **authenticated crawling** (WIP) via Playwright storage state.
 
 ## Features
 
-### Web Crawling
-- **Single page crawling** - Crawl one URL, get markdown
+### Crawling (Crawl4AI + proven defaults)
+- **Single page crawling** - Crawl one URL and return clean markdown
 - **Multiple pages** - Batch crawl a list of URLs with concurrency control
 - **Site crawling** - BFS strategy with max depth and page limits
-- **Clean markdown output** - Optimized for documentation sites
-- **Switchable markdown dedup** - `exact` (default) removes repeated blocks, `off` disables dedup
+- **Proven extraction config** - Production-tested selectors/exclusions and markdown tuning for docs-style websites
+
+### Content Quality
+- **Markdown deduplication** - `exact` (default) removes repeated blocks, `off` disables dedup
+- **Dedup guardrails** - Non-destructive metadata signals when removal looks unusually aggressive
 - **Link removal** - Strip all links from output for cleaner LLM context (`--remove-links`)
-- **Reference extraction** - Captures all links from crawled pages
+- **Reference extraction** - Captures links from crawled pages
+
+### Authenticated Crawling (WIP)
+- **Storage-state based auth** - Crawl logged-in pages using Playwright `storage_state`
+- **Session capture tool** - `crawl-capture` for manual login and state export
+- **Current status: WIP** - Auth flow works, but UX/flow is not final yet
 
 ### Web Search
 - **SearXNG integration** - Privacy-respecting metasearch engine

@@ -35,9 +35,11 @@ Example usage:
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional
+import inspect
+from typing import Any, List, Optional
 
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+from crawl4ai.models import CrawlResult, CrawlResultContainer
 
 from .builder import build_document_from_result
 from .config import RunConfigOverrides, build_markdown_run_config
@@ -86,6 +88,7 @@ async def crawl_page_async(
     url: str,
     *,
     config: Optional[CrawlerRunConfig] = None,
+    dedup_mode: str = "exact",
 ) -> CrawledDocument:
     """
     Crawl a single page and return the extracted markdown.
@@ -104,24 +107,53 @@ async def crawl_page_async(
     async with AsyncWebCrawler() as crawler:
         container = await crawler.arun(url=url, config=run_config)
 
-    try:
-        first_result = container[0]
-    except (IndexError, TypeError):
-        first_result = None
+    first_result = await _extract_first_result(container)
 
     if first_result is None:
         raise ValueError(f"Crawler returned no results for {url}")
 
-    return build_document_from_result(first_result)
+    return build_document_from_result(first_result, dedup_mode=dedup_mode)
+
+
+async def _extract_first_result(container: Any) -> Optional[CrawlResult]:
+    """Extract first CrawlResult from any crawl4ai return shape."""
+    if isinstance(container, CrawlResult):
+        return container
+
+    if isinstance(container, CrawlResultContainer):
+        for item in container:
+            return item
+        return None
+
+    if isinstance(container, list):
+        for item in container:
+            if isinstance(item, CrawlResult):
+                return item
+            if isinstance(item, CrawlResultContainer):
+                for sub_item in item:
+                    return sub_item
+        return None
+
+    if inspect.isasyncgen(container):
+        async for item in container:
+            if isinstance(item, CrawlResult):
+                return item
+            if isinstance(item, CrawlResultContainer):
+                for sub_item in item:
+                    return sub_item
+            return item
+
+    return None
 
 
 def crawl_page(
     url: str,
     *,
     config: Optional[CrawlerRunConfig] = None,
+    dedup_mode: str = "exact",
 ) -> CrawledDocument:
     """Synchronous wrapper for crawl_page_async."""
-    return asyncio.run(crawl_page_async(url, config=config))
+    return asyncio.run(crawl_page_async(url, config=config, dedup_mode=dedup_mode))
 
 
 async def crawl_pages_async(
@@ -129,6 +161,7 @@ async def crawl_pages_async(
     *,
     config: Optional[CrawlerRunConfig] = None,
     concurrency: int = 3,
+    dedup_mode: str = "exact",
 ) -> List[CrawledDocument]:
     """
     Crawl multiple pages and return their extracted markdown.
@@ -148,7 +181,11 @@ async def crawl_pages_async(
     async def crawl_one(url: str) -> CrawledDocument:
         async with semaphore:
             try:
-                return await crawl_page_async(url, config=run_config)
+                return await crawl_page_async(
+                    url,
+                    config=run_config,
+                    dedup_mode=dedup_mode,
+                )
             except Exception as exc:
                 # Return a failed document instead of raising
                 return CrawledDocument(
@@ -168,6 +205,14 @@ def crawl_pages(
     *,
     config: Optional[CrawlerRunConfig] = None,
     concurrency: int = 3,
+    dedup_mode: str = "exact",
 ) -> List[CrawledDocument]:
     """Synchronous wrapper for crawl_pages_async."""
-    return asyncio.run(crawl_pages_async(urls, config=config, concurrency=concurrency))
+    return asyncio.run(
+        crawl_pages_async(
+            urls,
+            config=config,
+            concurrency=concurrency,
+            dedup_mode=dedup_mode,
+        )
+    )

@@ -65,6 +65,7 @@ async def crawl_site_async(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
+    dedup_mode: str = "exact",
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -124,7 +125,7 @@ async def crawl_site_async(
 
         async for result in _iterate_results(crawl_result):
             try:
-                document = build_document_from_result(result)
+                document = build_document_from_result(result, dedup_mode=dedup_mode)
             except Exception as exc:
                 LOGGER.warning("Failed to build document for %s: %s", result.url, exc)
                 errors.append(
@@ -179,6 +180,7 @@ def crawl_site(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
+    dedup_mode: str = "exact",
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -187,6 +189,7 @@ def crawl_site(
             max_depth=max_depth,
             max_pages=max_pages,
             include_subdomains=include_subdomains,
+            dedup_mode=dedup_mode,
         )
     )
 

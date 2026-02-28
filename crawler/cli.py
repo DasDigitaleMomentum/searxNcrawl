@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
 from dotenv import load_dotenv
 
 # Configuration directory for global CLI usage
@@ -61,8 +62,8 @@ def _load_config() -> None:
 
 _load_config()
 
-from .auth import AuthConfig, load_auth_from_env  # noqa: E402
-from .document import CrawledDocument  # noqa: E402
+from .document import CrawledDocument
+from .session_capture import capture_session_async
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -86,7 +87,18 @@ def _strip_markdown_links(text: str) -> str:
 
 
 def _format_search_markdown(data: Dict[str, Any]) -> str:
-    """Format search results as markdown."""
+    """Format search results as markdown.
+
+    Example output:
+    # Search: python tutorials
+
+    ## 1. Python Tutorial - W3Schools
+    https://www.w3schools.com/python/
+
+    Well organized tutorials with examples...
+
+    ---
+    """
     lines = []
     query = data.get("query", "")
     results = data.get("results", [])
@@ -207,93 +219,8 @@ def _write_output(
             logging.info("Wrote %s", path)
 
 
-def _build_cli_auth(args: argparse.Namespace) -> Optional[AuthConfig]:
-    """Build AuthConfig from CLI arguments, falling back to env vars."""
-    cookies = None
-    headers_dict = None
-
-    # Parse --cookies (JSON string or file path)
-    if hasattr(args, "cookies") and args.cookies:
-        cookies_val = args.cookies
-        if cookies_val.startswith("[") or cookies_val.startswith("{"):
-            # JSON string
-            parsed = json.loads(cookies_val)
-            cookies = parsed if isinstance(parsed, list) else [parsed]
-        elif Path(cookies_val).is_file():
-            # File path
-            with open(cookies_val, "r") as fh:
-                cookies = json.load(fh)
-        else:
-            logging.error("Invalid --cookies value: %s", cookies_val)
-
-    # Parse --header flags
-    if hasattr(args, "header") and args.header:
-        headers_dict = {}
-        for h in args.header:
-            if ":" in h:
-                key, value = h.split(":", 1)
-                headers_dict[key.strip()] = value.strip()
-            else:
-                logging.warning("Invalid header format (expected 'Key: Value'): %s", h)
-
-    storage_state = getattr(args, "storage_state", None)
-    auth_profile = getattr(args, "auth_profile", None)
-
-    # Explicit CLI args take precedence
-    if any([cookies, headers_dict, storage_state, auth_profile]):
-        # Auto-resolve storage_state.json from profile directory
-        resolved_storage = storage_state
-        if auth_profile and not storage_state:
-            profile_ss = Path(auth_profile) / "storage_state.json"
-            if profile_ss.is_file():
-                resolved_storage = str(profile_ss)
-                logging.info(
-                    "Resolved storage state from profile: %s", resolved_storage
-                )
-        return AuthConfig(
-            cookies=cookies,
-            headers=headers_dict,
-            storage_state=resolved_storage,
-            user_data_dir=auth_profile,
-        )
-
-    # Fall back to env vars
-    return load_auth_from_env()
-
-
-def _add_auth_args(parser: argparse.ArgumentParser) -> None:
-    """Add authentication arguments to an argparse parser."""
-    auth_group = parser.add_argument_group("authentication")
-    auth_group.add_argument(
-        "--cookies",
-        type=str,
-        default=None,
-        help="Cookies as JSON string or path to cookies JSON file. "
-        'Example: \'[{"name":"sid","value":"abc","domain":".example.com"}]\'',
-    )
-    auth_group.add_argument(
-        "--header",
-        action="append",
-        default=None,
-        help="Custom HTTP header (can be repeated). "
-        'Example: --header "Authorization: Bearer xyz"',
-    )
-    auth_group.add_argument(
-        "--storage-state",
-        type=str,
-        default=None,
-        help="Path to Playwright storage state JSON file (from capture-auth)",
-    )
-    auth_group.add_argument(
-        "--auth-profile",
-        type=str,
-        default=None,
-        help="Path to persistent browser profile directory",
-    )
-
-
 # =============================================================================
-# Crawl command
+# CRAWL COMMAND
 # =============================================================================
 
 
@@ -316,23 +243,16 @@ Examples:
   # Site crawl with depth/page limits
   crawl https://docs.example.com --site --max-depth 2 --max-pages 10 -o docs/
 
-  # SPA / JS-rendered pages (wait for content to load)
-  crawl https://spa.example.com --delay 3 --wait-until networkidle
+  # Output as JSON (includes metadata)
+  crawl https://example.com --json
 
-  # Authenticated crawl with storage state
-  crawl --storage-state auth_state.json https://protected.example.com
+  # Clean output without links
+  crawl https://example.com --remove-links
 
-  # Combined: authenticated SPA crawl
-  crawl --storage-state auth.json --delay 3 --wait-until networkidle https://spa.example.com
-
-  # Capture auth session interactively
-  crawl capture-auth --url https://login.example.com --output auth_state.json
+  # Crawl with authenticated browser state
+  crawl https://example.com --storage-state ./state.json
 """,
     )
-
-    # Check for capture-auth subcommand
-    if argv and argv[0] == "capture-auth":
-        return _parse_capture_auth_args(argv[1:])
 
     parser.add_argument(
         "urls",
@@ -375,6 +295,19 @@ Examples:
         help="Concurrent crawls for multiple URLs (default: 3)",
     )
     parser.add_argument(
+        "--storage-state",
+        type=str,
+        default=None,
+        help="Path to Playwright storage_state JSON for authenticated crawling",
+    )
+    parser.add_argument(
+        "--dedup-mode",
+        type=str,
+        choices=["exact", "off"],
+        default="exact",
+        help="Markdown dedup mode (default: exact)",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -385,131 +318,26 @@ Examples:
         action="store_true",
         help="Remove all links from markdown output",
     )
-
-    # SPA / JS-rendering options
-    spa_group = parser.add_argument_group("SPA / JavaScript rendering")
-    spa_group.add_argument(
-        "--delay",
-        type=float,
-        default=None,
-        help="Seconds to wait after page load before extracting content. "
-        "Essential for SPA/JS-rendered pages (e.g. --delay 3)",
-    )
-    spa_group.add_argument(
-        "--wait-until",
-        type=str,
-        default=None,
-        choices=["load", "domcontentloaded", "networkidle", "commit"],
-        help="Page load event to wait for (default: load). "
-        "Use 'networkidle' for SPA pages that fetch data via API calls",
-    )
-
     parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
         help="Enable verbose logging",
     )
-
-    # Add auth arguments
-    _add_auth_args(parser)
 
     return parser.parse_args(argv)
-
-
-def _parse_capture_auth_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    """Parse arguments for the capture-auth subcommand."""
-    parser = argparse.ArgumentParser(
-        prog="crawl capture-auth",
-        description="Capture authentication session via interactive browser login.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  # Open browser for login, export storage state
-  crawl capture-auth --url https://login.example.com
-
-  # Export to specific file
-  crawl capture-auth --url https://login.example.com --output my_auth.json
-
-  # Use persistent browser profile (cookies survive restarts)
-  crawl capture-auth --url https://login.example.com --profile my-site
-
-  # Auto-capture when redirected to dashboard
-  crawl capture-auth --url https://login.example.com --wait-for-url "/dashboard"
-
-  # With custom timeout
-  crawl capture-auth --url https://login.example.com --timeout 600
-""",
-    )
-
-    parser.add_argument(
-        "--url",
-        type=str,
-        required=True,
-        help="Login page URL to navigate to",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default="auth_state.json",
-        help="Output path for storage state JSON (default: auth_state.json)",
-    )
-    parser.add_argument(
-        "--wait-for-url",
-        type=str,
-        default=None,
-        help="Regex pattern: auto-capture when browser URL matches",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=300,
-        help="Timeout in seconds for login completion (default: 300)",
-    )
-    parser.add_argument(
-        "--profile",
-        type=str,
-        default=None,
-        help="Profile name or path for persistent browser session. "
-        "Named profiles are stored under ~/.crawl4ai/profiles/<name>. "
-        "Cookies and localStorage survive across sessions.",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-
-    args = parser.parse_args(argv)
-    args.capture_auth = True
-    return args
 
 
 async def _run_crawl_async(args: argparse.Namespace) -> int:
     """Main async entry point for crawl."""
     from . import crawl_page_async, crawl_pages_async, crawl_site_async
-    from .config import build_markdown_run_config
-
-    # Build auth config from CLI args / env vars
-    auth = _build_cli_auth(args)
-    if auth:
-        logging.info("Authentication enabled")
-
-    # Build run config with SPA overrides if specified
-    run_config = None
-    delay = getattr(args, "delay", None)
-    wait_until = getattr(args, "wait_until", None)
-    if delay is not None or wait_until is not None:
-        run_config = build_markdown_run_config()
-        if delay is not None:
-            run_config.delay_before_return_html = delay
-            logging.info("SPA delay: %.1fs after page load", delay)
-        if wait_until is not None:
-            run_config.wait_until = wait_until
-            logging.info("Page wait strategy: %s", wait_until)
 
     docs: List[CrawledDocument] = []
+    auth = (
+        {"storage_state": args.storage_state}
+        if getattr(args, "storage_state", None)
+        else None
+    )
 
     if args.site:
         if len(args.urls) > 1:
@@ -527,8 +355,8 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             max_depth=args.max_depth,
             max_pages=args.max_pages,
             include_subdomains=args.include_subdomains,
+            dedup_mode=args.dedup_mode,
             auth=auth,
-            run_config=run_config,
         )
         docs = result.documents
         logging.info(
@@ -540,15 +368,19 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
 
     elif len(args.urls) == 1:
         logging.info("Crawling: %s", args.urls[0])
-        doc = await crawl_page_async(args.urls[0], config=run_config, auth=auth)
+        doc = await crawl_page_async(
+            args.urls[0],
+            dedup_mode=args.dedup_mode,
+            auth=auth,
+        )
         docs = [doc]
 
     else:
         logging.info("Crawling %d URLs...", len(args.urls))
         docs = await crawl_pages_async(
             args.urls,
-            config=run_config,
             concurrency=args.concurrency,
+            dedup_mode=args.dedup_mode,
             auth=auth,
         )
 
@@ -574,42 +406,8 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
     return 0 if successful else 1
 
 
-async def _run_capture_auth_async(args: argparse.Namespace) -> int:
-    """Run the capture-auth subcommand."""
-    from .capture import capture_auth_state
-
-    try:
-        await capture_auth_state(
-            url=args.url,
-            output_path=args.output,
-            wait_for_url=args.wait_for_url,
-            timeout=args.timeout,
-            profile=getattr(args, "profile", None),
-        )
-        return 0
-    except Exception as exc:
-        logging.error("Capture failed: %s", exc)
-        if args.verbose:
-            logging.exception("Full traceback:")
-        return 1
-
-
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI entry point for crawl command."""
-    # Check for capture-auth subcommand before parsing
-    effective_argv = argv if argv is not None else sys.argv[1:]
-    if effective_argv and effective_argv[0] == "capture-auth":
-        args = _parse_capture_auth_args(effective_argv[1:])
-        _setup_logging(args.verbose)
-        try:
-            return asyncio.run(_run_capture_auth_async(args))
-        except KeyboardInterrupt:
-            logging.info("Interrupted")
-            return 130
-        except Exception as exc:
-            logging.error("Error: %s", exc)
-            return 1
-
     args = _parse_crawl_args(argv)
     _setup_logging(args.verbose)
 
@@ -626,7 +424,110 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 # =============================================================================
-# Search command
+# CAPTURE COMMAND
+# =============================================================================
+
+
+def _parse_capture_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="crawl-capture",
+        description="Capture Playwright storage_state via manual login.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  # Open login page and capture when redirected to dashboard
+  crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/dashboard.*' --output ./state.json
+
+  # Overwrite existing state file
+  crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/app.*' --output ./state.json --overwrite
+""",
+    )
+
+    parser.add_argument(
+        "--start-url",
+        type=str,
+        default=None,
+        help="Optional URL to open before manual login",
+    )
+    parser.add_argument(
+        "--completion-url",
+        type=str,
+        required=True,
+        help="Regex pattern that marks successful capture when current URL matches",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Target path for captured storage_state JSON",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        help="Capture timeout in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing storage_state file",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run browser headless (default: headed for manual login)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+
+    return parser.parse_args(argv)
+
+
+async def _run_capture_async(args: argparse.Namespace) -> int:
+    result = await capture_session_async(
+        args.output,
+        completion_url_pattern=args.completion_url,
+        start_url=args.start_url,
+        timeout_seconds=args.timeout,
+        overwrite=args.overwrite,
+        headless=args.headless,
+    )
+
+    if result.status == "success":
+        logging.info("Capture success: %s", result.storage_state_path)
+        return 0
+
+    if result.status == "timeout":
+        logging.error("Capture timeout: %s", result.message)
+        return 2
+
+    logging.warning("Capture aborted: %s", result.message)
+    return 130
+
+
+def capture_main(argv: Optional[List[str]] = None) -> int:
+    """CLI entry point for isolated session capture."""
+    args = _parse_capture_args(argv)
+    _setup_logging(args.verbose)
+
+    try:
+        return asyncio.run(_run_capture_async(args))
+    except KeyboardInterrupt:
+        logging.info("Interrupted")
+        return 130
+    except Exception as exc:
+        logging.error("Error: %s", exc)
+        if args.verbose:
+            logging.exception("Full traceback:")
+        return 1
+
+
+# =============================================================================
+# SEARCH COMMAND
 # =============================================================================
 
 
@@ -699,12 +600,6 @@ Examples:
         help="Maximum results to return (default: 10)",
     )
     parser.add_argument(
-        "--pageno",
-        type=int,
-        default=1,
-        help="Page number for results (default: 1)",
-    )
-    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -729,47 +624,94 @@ Examples:
 
 async def _run_search_async(args: argparse.Namespace) -> int:
     """Main async entry point for search."""
-    from .search import SearchError, search_async
+    searxng_url = os.getenv("SEARXNG_URL", "http://localhost:8888")
+    searxng_username = os.getenv("SEARXNG_USERNAME")
+    searxng_password = os.getenv("SEARXNG_PASSWORD")
 
     logging.info("Searching for: %s", args.query)
 
+    # Build search parameters
+    params: Dict[str, Any] = {
+        "q": args.query,
+        "format": "json",
+        "language": args.language,
+        "safesearch": args.safesearch,
+    }
+
+    if args.time_range:
+        params["time_range"] = args.time_range
+
+    if args.categories:
+        params["categories"] = ",".join(args.categories)
+
+    if args.engines:
+        params["engines"] = ",".join(args.engines)
+
+    # Create HTTP client
+    auth = None
+    if searxng_username and searxng_password:
+        auth = httpx.BasicAuth(searxng_username, searxng_password)
+
     try:
-        result = await search_async(
-            args.query,
-            language=args.language,
-            time_range=args.time_range,
-            categories=args.categories,
-            engines=args.engines,
-            safesearch=args.safesearch,
-            pageno=args.pageno,
-            max_results=args.max_results,
-        )
-    except SearchError as exc:
-        logging.error(str(exc))
+        async with httpx.AsyncClient(
+            base_url=searxng_url,
+            auth=auth,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        ) as client:
+            response = await client.get("/search", params=params)
+            response.raise_for_status()
+            data = response.json()
+
+        # Limit results
+        max_results = min(max(1, args.max_results), 50)
+        if "results" in data:
+            data["results"] = data["results"][:max_results]
+            data["number_of_results"] = len(data["results"])
+
+        logging.info("Found %d results", data.get("number_of_results", 0))
+
+        # Format output
+        if args.json_output:
+            output = json.dumps(data, indent=2, ensure_ascii=False)
+        else:
+            output = _format_search_markdown(data)
+
+        if args.output:
+            path = Path(args.output)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(output)
+            logging.info("Wrote results to %s", path)
+        else:
+            print(output)
+
+        return 0
+
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            logging.error(
+                "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
+            )
+        else:
+            logging.error(
+                "SearXNG API error: %d - %s",
+                exc.response.status_code,
+                exc.response.text,
+            )
         return 1
+
+    except httpx.RequestError as exc:
+        logging.error("Request failed: %s", exc)
+        return 1
+
     except Exception as exc:
         logging.error("Unexpected error: %s", exc)
         if args.verbose:
             logging.exception("Full traceback:")
         return 1
-
-    logging.info("Found %d results", result.number_of_results)
-
-    data = result.to_dict()
-    if args.json_output:
-        output = json.dumps(data, indent=2, ensure_ascii=False)
-    else:
-        output = _format_search_markdown(data)
-
-    if args.output:
-        path = Path(args.output)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(output)
-        logging.info("Wrote results to %s", path)
-    else:
-        print(output)
-
-    return 0
 
 
 def search_main(argv: Optional[List[str]] = None) -> int:

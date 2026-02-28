@@ -1,6 +1,6 @@
 [project]
 name = "searxNcrawl"
-version = "0.2.0"
+version = "0.1.0"
 description = "searxNcrawl web crawler with markdown extraction - no DB, no enrichment, just crawling."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,15 +14,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
 
 [project.scripts]
 crawl = "crawler.cli:main"
+crawl-capture = "crawler.cli:capture_main"
 search = "crawler.cli:search_main"
 crawl-mcp = "crawler.mcp_server:main"
 
 [tool.setuptools]
-package-dir = { "" = "." }
+package-dir = {"" = "."}
 include-package-data = true
 
 [tool.setuptools.packages.find]
@@ -36,4 +40,3 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = ["e2e: End-to-end tests requiring network and/or external services"]

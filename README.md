@@ -13,6 +13,7 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **Multiple pages** - Batch crawl a list of URLs with concurrency control
 - **Site crawling** - BFS strategy with max depth and page limits
 - **Clean markdown output** - Optimized for documentation sites
+- **Switchable markdown dedup** - `exact` (default) removes repeated blocks, `off` disables dedup
 - **Link removal** - Strip all links from output for cleaner LLM context (`--remove-links`)
 - **Reference extraction** - Captures all links from crawled pages
 
@@ -20,36 +21,16 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **SearXNG integration** - Privacy-respecting metasearch engine
 - **Configurable search** - Language, time range, categories, engines
 - **Safe search** - Adjustable content filtering
-- **Python API** - `search_async()` and `search()` with structured `SearchResult` return type
-- **Pagination** - Navigate result pages via `--pageno` (CLI) or `pageno` parameter
-
-### Authenticated Crawling
-- **Cookies injection** - Pass session cookies directly
-- **Custom headers** - Add `Authorization: Bearer` or any headers
-- **Storage state** - Reuse Playwright browser state (cookies + localStorage)
-- **Persistent profiles** - Saved browser profiles across crawls
-- **Environment defaults** - Set auth via `CRAWL_AUTH_*` env vars
-
-### Auth Session Capture
-- **Interactive login** - Opens a headed browser for manual login
-- **Storage state export** - Saves cookies + localStorage as JSON
-- **Auto-capture** - Optional URL-match trigger (`--wait-for-url`)
-- **Profile support** - Save to named persistent profiles
-
-### SPA / JavaScript Rendering
-- **Page load delay** - Wait for JS content to render (`--delay`)
-- **Wait strategies** - `load`, `domcontentloaded`, `networkidle`, `commit`
 
 ### CLI Tools
 - **`crawl`** - Crawl pages from the command line
+- **`crawl-capture`** - Isolated manual-login session capture to storage state
 - **`search`** - Search the web via SearXNG
-- **`capture-auth`** - Capture login sessions interactively
 - **Global installation** - Available system-wide after `pip install -e .`
 
 ### MCP Server
 - **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.)
 - **HTTP transport** - For remote access and web integrations
-- **4 tools** - `crawl`, `crawl_site`, `search`, `list_auth_profiles`
 
 ## Installation
 
@@ -93,10 +74,6 @@ SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 | `SEARXNG_URL` | `http://localhost:8888` | SearXNG instance URL |
 | `SEARXNG_USERNAME` | (none) | Optional basic auth username |
 | `SEARXNG_PASSWORD` | (none) | Optional basic auth password |
-| `CRAWL_AUTH_STORAGE_STATE` | (none) | Default Playwright storage state JSON path |
-| `CRAWL_AUTH_COOKIES_FILE` | (none) | Default cookies JSON file path |
-| `CRAWL_AUTH_PROFILE` | (none) | Default persistent browser profile directory |
-| `MCP_PORT` | `9555` | HTTP port for Docker deployment |
 
 #### SearXNG Instance Requirements
 
@@ -206,7 +183,7 @@ docker compose up --build
 
 Then configure OpenClaw to connect to the HTTP endpoint at `http://localhost:9555/mcp`.
 
-Once configured, OpenClaw will have access to the `crawl`, `crawl_site`, `search`, and `list_auth_profiles` tools.
+Once configured, OpenClaw will have access to the `crawl`, `crawl_site`, and `search` tools.
 
 ### Running with Docker Compose
 
@@ -243,12 +220,8 @@ Crawl one or more web pages and extract their content as markdown.
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `concurrency` | `int` | `3` | Max concurrent crawls |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
-| `cookies` | `List[Dict[str,str]]` | `null` | Cookie dicts for authenticated crawling (`name`, `value`, `domain`) |
-| `headers` | `Dict[str,str]` | `null` | Custom HTTP headers (e.g. `Authorization: Bearer xyz`) |
-| `storage_state` | `str` | `null` | Path to Playwright storage state JSON file |
-| `auth_profile` | `str` | `null` | Path to persistent browser profile directory |
-| `delay` | `float` | `null` | Seconds to wait after page load (SPA/JS) |
-| `wait_until` | `str` | `null` | Wait event: `load`, `domcontentloaded`, `networkidle`, `commit` |
+| `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
+| `storage_state` | `str` | `null` | Path to Playwright storage state JSON for authenticated crawling |
 
 **Output Formats:**
 - `markdown`: Clean concatenated markdown with URL headers and timestamps
@@ -265,24 +238,11 @@ crawl(urls=["https://example.com/page1", "https://example.com/page2"], output_fo
 # Clean output without links
 crawl(urls=["https://example.com"], remove_links=True)
 
-# Authenticated with cookies
-crawl(
-    urls=["https://protected.example.com"],
-    cookies=[{"name": "sid", "value": "abc", "domain": ".example.com"}]
-)
+# Disable markdown dedup
+crawl(urls=["https://example.com"], dedup_mode="off")
 
-# Authenticated with storage state
-crawl(
-    urls=["https://protected.example.com"],
-    storage_state="/path/to/auth_state.json"
-)
-
-# SPA with delay and wait strategy
-crawl(
-    urls=["https://spa.example.com"],
-    delay=3,
-    wait_until="networkidle"
-)
+# Crawl with authenticated storage state
+crawl(urls=["https://example.com"], storage_state="/path/to/state.json")
 ```
 
 #### `crawl_site`
@@ -298,12 +258,8 @@ Crawl an entire website starting from a seed URL using BFS strategy.
 | `include_subdomains` | `bool` | `false` | Include subdomains |
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
-| `cookies` | `List[Dict[str,str]]` | `null` | Cookie dicts for authenticated crawling (`name`, `value`, `domain`) |
-| `headers` | `Dict[str,str]` | `null` | Custom HTTP headers (e.g. `Authorization: Bearer xyz`) |
-| `storage_state` | `str` | `null` | Path to Playwright storage state JSON file |
-| `auth_profile` | `str` | `null` | Path to persistent browser profile directory |
-| `delay` | `float` | `null` | Seconds to wait after page load (SPA/JS) |
-| `wait_until` | `str` | `null` | Wait event: `load`, `domcontentloaded`, `networkidle`, `commit` |
+| `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
+| `storage_state` | `str` | `null` | Path to Playwright storage state JSON for authenticated crawling |
 
 **Examples:**
 ```
@@ -319,33 +275,11 @@ crawl_site(url="https://docs.example.com", output_format="json")
 # Clean output without links
 crawl_site(url="https://docs.example.com", remove_links=True)
 
-# Authenticated site crawl with browser profile
-crawl_site(
-    url="https://internal.example.com",
-    auth_profile="/path/to/chrome-profile",
-    max_depth=3,
-    max_pages=50
-)
+# Disable markdown dedup for site crawl
+crawl_site(url="https://docs.example.com", dedup_mode="off")
 
-# SPA site crawl with delay
-crawl_site(
-    url="https://spa.example.com",
-    delay=3,
-    wait_until="networkidle"
-)
-```
-
-#### `list_auth_profiles`
-
-List available persistent browser profiles for authenticated crawling.
-
-**Parameters:** None
-
-**Returns:** JSON string with list of profiles, each with `name`, `path`, and `modified` timestamp.
-
-**Example:**
-```
-list_auth_profiles()
+# Site crawl with authenticated storage state
+crawl_site(url="https://docs.example.com", storage_state="/path/to/state.json")
 ```
 
 #### `search`
@@ -436,7 +370,17 @@ When using `output_format="json"`, the output includes:
       "error_message": null,
       "metadata": {
         "title": "Example",
-        "status_code": 200
+        "status_code": 200,
+        "dedup_mode": "exact",
+        "dedup_sections_total": 12,
+        "dedup_sections_removed": 3,
+        "dedup_chars_removed": 542,
+        "dedup_applied": true,
+        "dedup_guardrail_checked": true,
+        "dedup_guardrail_triggered": false,
+        "dedup_guardrail_reason": "within-threshold",
+        "dedup_guardrail_section_removal_rate": 0.25,
+        "dedup_guardrail_section_rate_threshold": 0.6
       },
       "references": [
         {"index": 1, "href": "https://example.com/about", "label": "About"}
@@ -464,13 +408,19 @@ When using `output_format="json"`, the output includes:
 from crawler import crawl_page, crawl_page_async
 
 # Sync
-doc = crawl_page("https://docs.example.com/intro")
+doc = crawl_page("https://docs.example.com/intro", dedup_mode="exact")
 print(doc.markdown)
 print(doc.final_url)
 print(doc.references)  # List of Reference(index, href, label)
 
 # Async
-doc = await crawl_page_async("https://docs.example.com/intro")
+doc = await crawl_page_async("https://docs.example.com/intro", dedup_mode="off")
+
+# Async with authenticated state
+doc = await crawl_page_async(
+    "https://docs.example.com/intro",
+    auth={"storage_state": "/path/to/state.json"},
+)
 ```
 
 ### Multiple Pages
@@ -485,7 +435,7 @@ urls = [
 ]
 
 # Sync (with concurrency limit)
-docs = crawl_pages(urls, concurrency=3)
+docs = crawl_pages(urls, concurrency=3, dedup_mode="exact")
 
 for doc in docs:
     if doc.status == "success":
@@ -495,7 +445,13 @@ for doc in docs:
         print(f"FAILED: {doc.request_url} - {doc.error_message}")
 
 # Async
-docs = await crawl_pages_async(urls, concurrency=5)
+docs = await crawl_pages_async(urls, concurrency=5, dedup_mode="off")
+
+# Async with authenticated state
+docs = await crawl_pages_async(
+    urls,
+    auth={"storage_state": "/path/to/state.json"},
+)
 ```
 
 ### Site Crawl (BFS)
@@ -509,6 +465,8 @@ result = crawl_site(
     max_depth=2,           # How deep to follow links
     max_pages=10,          # Stop after N pages
     include_subdomains=False,
+    dedup_mode="exact",   # "exact" (default) or "off"
+    auth={"storage_state": "/path/to/state.json"},
 )
 
 print(f"Crawled {result.stats['total_pages']} pages")
@@ -518,118 +476,6 @@ print(f"Failed: {result.stats['failed_pages']}")
 for doc in result.documents:
     print(f"{doc.status}: {doc.final_url}")
 ```
-
-### Authenticated Crawling
-
-```python
-from crawler import crawl_page_async
-from crawler.auth import AuthConfig
-
-# With storage state (from capture-auth)
-auth = AuthConfig(storage_state="./auth_state.json")
-doc = await crawl_page_async("https://protected.example.com", auth=auth)
-
-# With cookies
-auth = AuthConfig(cookies=[{"name": "sid", "value": "abc", "domain": ".example.com"}])
-doc = await crawl_page_async("https://protected.example.com", auth=auth)
-
-# With headers
-auth = AuthConfig(headers={"Authorization": "Bearer xyz123"})
-doc = await crawl_page_async("https://api.example.com/docs", auth=auth)
-```
-
-### Search
-
-```python
-from crawler import search_async, search, SearchResult
-
-# Async search
-result: SearchResult = await search_async("python tutorials")
-print(result.query)
-print(f"Found {result.number_of_results} results")
-for item in result.results:
-    print(f"  {item.title} - {item.url}")
-
-# Sync search
-result = search("python tutorials", language="de", max_results=5)
-
-# With pagination
-page2 = search("python tutorials", pageno=2)
-
-# All parameters
-result = await search_async(
-    "AI news",
-    language="en",
-    time_range="week",
-    categories=["news"],
-    safesearch=1,
-    pageno=1,
-    max_results=20,
-)
-```
-
-## Authenticated Crawling
-
-Crawl pages behind login walls (OAuth, SSO, MFA) by providing authentication context.
-
-### Auth Methods
-
-| Method | CLI Flag | MCP Param | Env Var | Description |
-|--------|----------|-----------|---------|-------------|
-| Cookies | `--cookies` | `cookies` | `CRAWL_AUTH_COOKIES_FILE` | JSON string, file path, or list of cookie dicts |
-| Headers | `--header` (repeatable) | `headers` | -- | Custom HTTP headers |
-| Storage state | `--storage-state` | `storage_state` | `CRAWL_AUTH_STORAGE_STATE` | Playwright storage state JSON |
-| Browser profile | `--auth-profile` | `auth_profile` | `CRAWL_AUTH_PROFILE` | Persistent Chromium profile |
-
-### Priority Order
-
-Explicit parameters (CLI/MCP/API) > Environment variables > No auth
-
-### Quick Start
-
-```bash
-# 1. Capture a login session interactively
-crawl capture-auth --url https://login.example.com
-
-# 2. Use the captured session for crawling
-crawl --storage-state auth_state.json https://protected.example.com
-
-# Or set as environment default for all crawls
-export CRAWL_AUTH_STORAGE_STATE=./auth_state.json
-crawl https://protected.example.com
-```
-
-## SPA / JavaScript Rendering
-
-For single-page applications (SPAs) and JS-heavy sites, use the delay and wait strategy parameters:
-
-```bash
-# CLI: Wait 3 seconds after page load
-crawl https://spa.example.com --delay 3
-
-# CLI: Wait for all network requests to finish
-crawl https://spa.example.com --wait-until networkidle
-
-# CLI: Combined (recommended for complex SPAs)
-crawl https://spa.example.com --delay 3 --wait-until networkidle
-```
-
-```python
-# Python API
-from crawler import crawl_page_async, build_markdown_run_config
-
-config = build_markdown_run_config()
-config.delay_before_return_html = 3.0
-config.wait_until = "networkidle"
-doc = await crawl_page_async("https://spa.example.com", config=config)
-```
-
-| Wait Strategy | Description | Use When |
-|---------------|-------------|----------|
-| `load` | Default — waits for `load` event | Most static sites |
-| `domcontentloaded` | DOM parsed, stylesheets may still load | Fast initial render |
-| `networkidle` | No network activity for 500ms | SPAs that fetch data via API |
-| `commit` | First byte received | Fastest, for known-quick pages |
 
 ## CLI Usage
 
@@ -656,21 +502,65 @@ crawl https://example.com --json
 # Clean output without links (better for LLM context)
 crawl https://example.com --remove-links
 
+# Disable markdown dedup
+crawl https://example.com --dedup-mode off
+
+# Crawl with authenticated storage state
+crawl https://example.com --storage-state /path/to/state.json
+
 # JSON output for site crawl
 crawl https://docs.example.com --site --max-pages 5 --json -o result.json
-
-# Authenticated crawl with storage state
-crawl --storage-state auth_state.json https://protected.example.com
-
-# With custom headers
-crawl --header "Authorization: Bearer xyz" https://api.example.com/docs
-
-# SPA with auth combined
-crawl --storage-state auth.json --delay 3 --wait-until networkidle https://spa.example.com
 
 # Verbose logging
 crawl https://example.com -v
 ```
+
+### Dedup Mode (`crawl`)
+
+- `--dedup-mode exact` (default): removes exact repeated markdown blocks in a single document.
+- `--dedup-mode off`: disables markdown dedup and keeps extracted blocks unchanged.
+
+Dedup metrics are written into each document's `metadata` (e.g. `dedup_sections_removed`, `dedup_chars_removed`).
+Guardrails are non-destructive and annotate metadata via fields like
+`dedup_guardrail_checked`, `dedup_guardrail_triggered`, and `dedup_guardrail_reason`
+when removal ratios are unusually high.
+
+### Auth MVP (`storage_state`)
+
+- API, CLI, and MCP share one auth resolver path and support `storage_state` only in MVP scope.
+- CLI: pass `--storage-state /path/to/state.json`.
+- Python API: pass `auth={"storage_state": "/path/to/state.json"}`.
+- MCP tools (`crawl`, `crawl_site`): pass `storage_state`.
+- Session capture is isolated via `crawl-capture` and does not change normal crawl runtime behavior.
+- No-drift guarantee: auth integration does not change crawl config defaults (wait/selectors/SPA/persistent-session defaults).
+
+### Session Capture (`crawl-capture`)
+
+Use `crawl-capture` to create a Playwright `storage_state` file after manual login.
+
+```bash
+# Capture after login redirect matches completion URL regex
+crawl-capture \
+  --start-url https://example.com/login \
+  --completion-url 'https://example.com/dashboard.*' \
+  --output ./state.json
+
+# Overwrite existing output only when explicitly allowed
+crawl-capture \
+  --start-url https://example.com/login \
+  --completion-url 'https://example.com/app.*' \
+  --output ./state.json \
+  --overwrite
+```
+
+Explicit capture outcomes:
+- `success` (exit 0): storage state written.
+- `timeout` (exit 2): completion condition not reached in time.
+- `abort` (exit 130): browser/session closed before completion.
+
+Safety notes:
+- Keep `storage_state` files out of version control.
+- Capture is intentionally isolated from standard `crawl` / `crawl_site` execution paths.
 
 ### search
 
@@ -694,30 +584,6 @@ search "python asyncio" --json -o results.json
 
 # Limit results
 search "docker compose" --max-results 5
-
-# Page 2 of results
-search "python tutorials" --pageno 2
-```
-
-### capture-auth
-
-Capture a login session interactively for reuse with authenticated crawling.
-
-```bash
-# Open browser for login, export storage state
-crawl capture-auth --url https://login.example.com
-
-# Export to specific file
-crawl capture-auth --url https://login.example.com --output my_auth.json
-
-# Use persistent browser profile
-crawl capture-auth --url https://login.example.com --profile my-site
-
-# Auto-capture when redirected to dashboard
-crawl capture-auth --url https://login.example.com --wait-for-url "/dashboard"
-
-# With custom timeout (default: 300s)
-crawl capture-auth --url https://login.example.com --timeout 600
 ```
 
 ## CrawledDocument Structure
@@ -732,7 +598,7 @@ class CrawledDocument:
     html: Optional[str]       # Raw HTML (if available)
     headers: Dict[str, Any]   # HTTP response headers
     references: List[Reference]  # Extracted links
-    metadata: Dict[str, Any]  # Title, status code, etc.
+    metadata: Dict[str, Any]  # Title, status code, dedup metrics, guardrail info
     raw_markdown: Optional[str]  # Unprocessed markdown
     error_message: Optional[str]  # Error details if failed
 

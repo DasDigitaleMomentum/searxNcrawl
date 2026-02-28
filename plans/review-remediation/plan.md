@@ -53,7 +53,6 @@
 
 ## Validation Gates
 
-- [x] `pytest -q -m "not e2e"`
-- [x] `pytest -q tests/test_e2e.py -m e2e` (best effort, with skips allowed)
+- [x] `pytest -q` (full suite, no skips/deselection allowed by strict guard)
 - [x] `scripts/test-realworld.sh` static validation (syntax/behavior check)
 - [x] Docs/README updated to reflect changed defaults and new options

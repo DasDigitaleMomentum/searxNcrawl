@@ -1,129 +1,152 @@
 """End-to-end tests for crawler, search, and CLI.
 
-These tests hit real network services (httpbin.org, example.com, SearXNG)
-and require Playwright + Chromium to be installed. Every test is decorated
-with ``@pytest.mark.e2e`` and uses skip guards so the suite degrades
-gracefully when external dependencies are unavailable.
-
-Run only E2E tests::
-
-    pytest tests/test_e2e.py -m e2e -v
-
-Exclude E2E tests (deterministic baseline)::
-
-    pytest tests/ -m "not e2e" -q
+These tests run against a local HTTP test server to keep the suite deterministic
+and to avoid external availability dependencies.
 """
 
 from __future__ import annotations
 
-import functools
 import json
 import os
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Skip-condition helpers (evaluated once at import time via lru_cache)
-# ---------------------------------------------------------------------------
 
+class _IntegrationHandler(BaseHTTPRequestHandler):
+    """Local deterministic test server for crawl + search flows."""
 
-@functools.lru_cache(maxsize=1)
-def _has_network() -> bool:
-    """Return True if httpbin.org is reachable."""
-    try:
-        import httpx
+    def log_message(self, format: str, *args) -> None:  # noqa: A003
+        return
 
-        resp = httpx.get("https://httpbin.org/get", timeout=5)
-        return resp.status_code == 200
-    except Exception:
-        return False
+    def _send_json(self, payload: dict, status: int = 200) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
+    def _send_html(self, body: str, status: int = 200) -> None:
+        data = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
-@functools.lru_cache(maxsize=1)
-def _has_searxng() -> bool:
-    """Return True if SEARXNG_URL is set and the instance responds."""
-    try:
-        # Try loading .env the same way the CLI does
-        try:
-            from dotenv import load_dotenv
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        path = parsed.path
 
-            local_env = Path.cwd() / ".env"
-            if local_env.is_file():
-                load_dotenv(local_env)
-        except ImportError:
-            pass
+        if path == "/search":
+            query = parse_qs(parsed.query).get("q", [""])[0]
+            payload = {
+                "query": query,
+                "results": [
+                    {
+                        "title": "Local Result 1",
+                        "url": "https://example.test/1",
+                        "content": "Local test result content 1",
+                        "engine": "local",
+                    },
+                    {
+                        "title": "Local Result 2",
+                        "url": "https://example.test/2",
+                        "content": "Local test result content 2",
+                        "engine": "local",
+                    },
+                ],
+                "answers": [],
+                "suggestions": ["local suggestion"],
+                "corrections": [],
+            }
+            self._send_json(payload)
+            return
 
-        url = os.getenv("SEARXNG_URL")
-        if not url:
-            return False
+        if path == "/cookies":
+            cookies = self.headers.get("Cookie", "")
+            self._send_html(
+                (
+                    "<html><body><main>"
+                    "<h1>Cookies</h1>"
+                    f"<p>{cookies}</p>"
+                    "</main></body></html>"
+                )
+            )
+            return
 
-        import httpx
+        if path == "/spa":
+            self._send_html(
+                """
+                <html>
+                  <body>
+                    <main id="content">Loading...</main>
+                    <script>
+                      setTimeout(() => {
+                        document.getElementById("content").innerText =
+                          "SPA Ready Content";
+                      }, 250);
+                    </script>
+                  </body>
+                </html>
+                """
+            )
+            return
 
-        resp = httpx.get(
-            f"{url.rstrip('/')}/search",
-            params={"q": "test", "format": "json"},
-            timeout=5,
+        if path in {"", "/"}:
+            self._send_html(
+                (
+                    "<html><body><main>"
+                    "<h1>Example Domain</h1>"
+                    "<p>Local integration page</p>"
+                    "</main></body></html>"
+                )
+            )
+            return
+
+        self._send_html(
+            "<html><body><main><h1>Not Found</h1></main></body></html>", status=404
         )
-        return resp.status_code == 200
-    except Exception:
-        return False
 
 
-@functools.lru_cache(maxsize=1)
-def _has_playwright() -> bool:
-    """Return True if Playwright + Chromium are installed and usable."""
+@pytest.fixture(scope="session")
+def local_test_server() -> Iterator[str]:
+    """Start one local HTTP server for all E2E tests."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _IntegrationHandler)
+    host, port = server.server_address
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
     try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)
-            browser.close()
-        return True
-    except Exception:
-        return False
-
-
-# ---------------------------------------------------------------------------
-# Reusable skip decorators
-# ---------------------------------------------------------------------------
-
-requires_network = pytest.mark.skipif(
-    not _has_network(), reason="No network access (httpbin.org unreachable)"
-)
-requires_searxng = pytest.mark.skipif(
-    not _has_searxng(), reason="SearXNG not available"
-)
-requires_playwright = pytest.mark.skipif(
-    not _has_playwright(), reason="Playwright/Chromium not available"
-)
-
-
-# ===================================================================
-# E2E Tests
-# ===================================================================
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-async def test_crawl_basic():
-    """Baseline: crawl example.com with no auth or SPA config."""
+@pytest.mark.asyncio
+async def test_crawl_basic(local_test_server: str):
+    """Baseline: crawl local page with no auth or SPA config."""
     from crawler import crawl_page_async
 
-    doc = await crawl_page_async("https://example.com")
+    doc = await crawl_page_async(f"{local_test_server}/")
     assert doc.status == "success"
     assert "Example Domain" in doc.markdown
-    assert doc.final_url.startswith("https://example.com")
+    assert doc.final_url.startswith(local_test_server)
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-async def test_crawl_with_cookies():
-    """Auth crawl with cookie injection, validated via httpbin echo."""
+@pytest.mark.asyncio
+async def test_crawl_with_cookies(local_test_server: str):
+    """Auth crawl with cookie injection validated via local cookie echo."""
     from crawler import crawl_page_async
     from crawler.auth import AuthConfig
 
@@ -132,20 +155,19 @@ async def test_crawl_with_cookies():
             {
                 "name": "test_session",
                 "value": "abc123",
-                "domain": "httpbin.org",
+                "domain": "127.0.0.1",
                 "path": "/",
             }
         ]
     )
-    doc = await crawl_page_async("https://httpbin.org/cookies", auth=auth)
+    doc = await crawl_page_async(f"{local_test_server}/cookies", auth=auth)
     assert doc.status == "success"
     assert "test_session" in doc.markdown
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-async def test_crawl_with_storage_state(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_crawl_with_storage_state(tmp_path: Path, local_test_server: str):
     """Auth crawl with storage-state file injection."""
     from crawler import crawl_page_async
     from crawler.auth import AuthConfig
@@ -155,7 +177,7 @@ async def test_crawl_with_storage_state(tmp_path: Path):
             {
                 "name": "ss_token",
                 "value": "xyz789",
-                "domain": "httpbin.org",
+                "domain": "127.0.0.1",
                 "path": "/",
                 "secure": False,
                 "httpOnly": False,
@@ -169,16 +191,15 @@ async def test_crawl_with_storage_state(tmp_path: Path):
     ss_file.write_text(json.dumps(storage_state))
 
     auth = AuthConfig(storage_state=str(ss_file))
-    doc = await crawl_page_async("https://httpbin.org/cookies", auth=auth)
+    doc = await crawl_page_async(f"{local_test_server}/cookies", auth=auth)
     assert doc.status == "success"
     assert "ss_token" in doc.markdown
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-async def test_crawl_spa_with_delay():
-    """SPA parameter threading: delay + wait_until don't break the crawl."""
+@pytest.mark.asyncio
+async def test_crawl_spa_with_delay(local_test_server: str):
+    """SPA parameter threading: delay + wait_until preserve content readiness."""
     from crawler import crawl_page_async
     from crawler.config import build_markdown_run_config
 
@@ -186,18 +207,16 @@ async def test_crawl_spa_with_delay():
     run_config.delay_before_return_html = 1.0
     run_config.wait_until = "load"
 
-    doc = await crawl_page_async("https://example.com", config=run_config)
+    doc = await crawl_page_async(f"{local_test_server}/spa", config=run_config)
     assert doc.status == "success"
-    assert "Example Domain" in doc.markdown
+    assert "SPA Ready Content" in doc.markdown
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-def test_cli_crawl_direct():
-    """CLI subprocess: crawl example.com, markdown to stdout."""
+def test_cli_crawl_direct(local_test_server: str):
+    """CLI subprocess: crawl local page, markdown to stdout."""
     result = subprocess.run(
-        [sys.executable, "-m", "crawler.cli", "https://example.com"],
+        [sys.executable, "-m", "crawler.cli", f"{local_test_server}/"],
         capture_output=True,
         text=True,
         timeout=60,
@@ -207,19 +226,15 @@ def test_cli_crawl_direct():
 
 
 @pytest.mark.e2e
-@requires_network
-@requires_playwright
-def test_cli_crawl_json_output():
+def test_cli_crawl_json_output(local_test_server: str):
     """CLI subprocess: crawl --json, validate JSON structure."""
     result = subprocess.run(
-        [sys.executable, "-m", "crawler.cli", "https://example.com", "--json"],
+        [sys.executable, "-m", "crawler.cli", f"{local_test_server}/", "--json"],
         capture_output=True,
         text=True,
         timeout=60,
     )
     assert result.returncode == 0, f"stderr: {result.stderr[:500]}"
-    # crawl4ai may write progress lines to stdout before the JSON blob;
-    # extract the JSON object by finding the first '{' character.
     stdout = result.stdout
     json_start = stdout.find("{")
     assert json_start != -1, f"No JSON object found in stdout: {stdout[:300]}"
@@ -229,9 +244,8 @@ def test_cli_crawl_json_output():
 
 
 @pytest.mark.e2e
-@requires_searxng
-def test_cli_search():
-    """CLI subprocess: search via search_main against real SearXNG."""
+def test_cli_search(local_test_server: str):
+    """CLI subprocess: search via search_main against local SearXNG stub."""
     result = subprocess.run(
         [
             sys.executable,
@@ -245,7 +259,7 @@ def test_cli_search():
         capture_output=True,
         text=True,
         timeout=30,
-        env={**os.environ},
+        env={**os.environ, "SEARXNG_URL": local_test_server},
     )
     assert result.returncode == 0, f"stderr: {result.stderr[:500]}"
     assert result.stdout.strip(), "Expected non-empty search output"
@@ -253,8 +267,7 @@ def test_cli_search():
 
 
 @pytest.mark.e2e
-@requires_playwright
-def test_cli_capture_auth_smoke():
+def test_cli_capture_auth_smoke(local_test_server: str):
     """CLI subprocess: capture-auth smoke test (expect graceful failure)."""
     result = subprocess.run(
         [
@@ -263,7 +276,7 @@ def test_cli_capture_auth_smoke():
             "crawler.cli",
             "capture-auth",
             "--url",
-            "https://example.com",
+            f"{local_test_server}/",
             "--timeout",
             "2",
         ],
@@ -271,8 +284,6 @@ def test_cli_capture_auth_smoke():
         text=True,
         timeout=30,
     )
-    # In a headless environment, capture-auth should fail gracefully (exit 1).
-    # It should NOT hang or crash with an unhandled exception.
     assert result.returncode == 1, (
         f"Expected exit code 1 but got {result.returncode}. "
         f"stdout: {result.stdout[:200]}, stderr: {result.stderr[:200]}"
@@ -284,14 +295,13 @@ def test_cli_capture_auth_smoke():
 
 
 @pytest.mark.e2e
-@requires_searxng
-def test_search_python_api_sync():
-    """Python API: search() sync wrapper against real SearXNG."""
+def test_search_python_api_sync(local_test_server: str):
+    """Python API: search() sync wrapper against local SearXNG stub."""
     from crawler import SearchResult, search
 
-    result = search("test query", max_results=3)
+    result = search("test query", max_results=3, searxng_url=local_test_server)
     assert isinstance(result, SearchResult)
-    assert result.query  # SearXNG may normalise the query string
+    assert result.query
     assert len(result.results) > 0
     assert len(result.results) <= 3
     for item in result.results:
@@ -300,13 +310,12 @@ def test_search_python_api_sync():
 
 
 @pytest.mark.e2e
-@requires_searxng
 @pytest.mark.asyncio
-async def test_search_python_api_async():
-    """Python API: search_async() against real SearXNG."""
+async def test_search_python_api_async(local_test_server: str):
+    """Python API: search_async() against local SearXNG stub."""
     from crawler import SearchResult, search_async
 
-    result = await search_async("test query", max_results=3)
+    result = await search_async("test query", max_results=3, searxng_url=local_test_server)
     assert isinstance(result, SearchResult)
     assert result.query
     assert len(result.results) > 0

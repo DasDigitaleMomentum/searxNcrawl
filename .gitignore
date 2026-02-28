@@ -58,3 +58,6 @@ Thumbs.db
 # Playwright
 playwright/.cache/
 .env
+
+# Local scratch outputs
+tmp/

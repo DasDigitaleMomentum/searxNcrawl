@@ -24,6 +24,7 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 
 ### CLI Tools
 - **`crawl`** - Crawl pages from the command line
+- **`crawl-capture`** - Isolated manual-login session capture to storage state
 - **`search`** - Search the web via SearXNG
 - **Global installation** - Available system-wide after `pip install -e .`
 
@@ -220,6 +221,7 @@ Crawl one or more web pages and extract their content as markdown.
 | `concurrency` | `int` | `3` | Max concurrent crawls |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
 | `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
+| `storage_state` | `str` | `null` | Path to Playwright storage state JSON for authenticated crawling |
 
 **Output Formats:**
 - `markdown`: Clean concatenated markdown with URL headers and timestamps
@@ -238,6 +240,9 @@ crawl(urls=["https://example.com"], remove_links=True)
 
 # Disable markdown dedup
 crawl(urls=["https://example.com"], dedup_mode="off")
+
+# Crawl with authenticated storage state
+crawl(urls=["https://example.com"], storage_state="/path/to/state.json")
 ```
 
 #### `crawl_site`
@@ -254,6 +259,7 @@ Crawl an entire website starting from a seed URL using BFS strategy.
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
 | `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
+| `storage_state` | `str` | `null` | Path to Playwright storage state JSON for authenticated crawling |
 
 **Examples:**
 ```
@@ -271,6 +277,9 @@ crawl_site(url="https://docs.example.com", remove_links=True)
 
 # Disable markdown dedup for site crawl
 crawl_site(url="https://docs.example.com", dedup_mode="off")
+
+# Site crawl with authenticated storage state
+crawl_site(url="https://docs.example.com", storage_state="/path/to/state.json")
 ```
 
 #### `search`
@@ -406,6 +415,12 @@ print(doc.references)  # List of Reference(index, href, label)
 
 # Async
 doc = await crawl_page_async("https://docs.example.com/intro", dedup_mode="off")
+
+# Async with authenticated state
+doc = await crawl_page_async(
+    "https://docs.example.com/intro",
+    auth={"storage_state": "/path/to/state.json"},
+)
 ```
 
 ### Multiple Pages
@@ -431,6 +446,12 @@ for doc in docs:
 
 # Async
 docs = await crawl_pages_async(urls, concurrency=5, dedup_mode="off")
+
+# Async with authenticated state
+docs = await crawl_pages_async(
+    urls,
+    auth={"storage_state": "/path/to/state.json"},
+)
 ```
 
 ### Site Crawl (BFS)
@@ -445,6 +466,7 @@ result = crawl_site(
     max_pages=10,          # Stop after N pages
     include_subdomains=False,
     dedup_mode="exact",   # "exact" (default) or "off"
+    auth={"storage_state": "/path/to/state.json"},
 )
 
 print(f"Crawled {result.stats['total_pages']} pages")
@@ -483,6 +505,9 @@ crawl https://example.com --remove-links
 # Disable markdown dedup
 crawl https://example.com --dedup-mode off
 
+# Crawl with authenticated storage state
+crawl https://example.com --storage-state /path/to/state.json
+
 # JSON output for site crawl
 crawl https://docs.example.com --site --max-pages 5 --json -o result.json
 
@@ -499,6 +524,43 @@ Dedup metrics are written into each document's `metadata` (e.g. `dedup_sections_
 Guardrails are non-destructive and annotate metadata via fields like
 `dedup_guardrail_checked`, `dedup_guardrail_triggered`, and `dedup_guardrail_reason`
 when removal ratios are unusually high.
+
+### Auth MVP (`storage_state`)
+
+- API, CLI, and MCP share one auth resolver path and support `storage_state` only in MVP scope.
+- CLI: pass `--storage-state /path/to/state.json`.
+- Python API: pass `auth={"storage_state": "/path/to/state.json"}`.
+- MCP tools (`crawl`, `crawl_site`): pass `storage_state`.
+- Session capture is isolated via `crawl-capture` and does not change normal crawl runtime behavior.
+- No-drift guarantee: auth integration does not change crawl config defaults (wait/selectors/SPA/persistent-session defaults).
+
+### Session Capture (`crawl-capture`)
+
+Use `crawl-capture` to create a Playwright `storage_state` file after manual login.
+
+```bash
+# Capture after login redirect matches completion URL regex
+crawl-capture \
+  --start-url https://example.com/login \
+  --completion-url 'https://example.com/dashboard.*' \
+  --output ./state.json
+
+# Overwrite existing output only when explicitly allowed
+crawl-capture \
+  --start-url https://example.com/login \
+  --completion-url 'https://example.com/app.*' \
+  --output ./state.json \
+  --overwrite
+```
+
+Explicit capture outcomes:
+- `success` (exit 0): storage state written.
+- `timeout` (exit 2): completion condition not reached in time.
+- `abort` (exit 130): browser/session closed before completion.
+
+Safety notes:
+- Keep `storage_state` files out of version control.
+- Capture is intentionally isolated from standard `crawl` / `crawl_site` execution paths.
 
 ### search
 

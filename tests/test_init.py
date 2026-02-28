@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import crawler
+from crawler.auth import ResolvedAuth
 
 
 @pytest.mark.asyncio
@@ -40,7 +41,13 @@ async def test_crawl_pages_async_defaults_to_exact(
 ) -> None:
     captured: list[str] = []
 
-    async def fake_crawl_page_async(url, *, config=None, dedup_mode="exact"):
+    async def fake_crawl_page_async(
+        url,
+        *,
+        config=None,
+        dedup_mode="exact",
+        auth=None,
+    ):
         captured.append(dedup_mode)
         return SimpleNamespace(status="success", request_url=url)
 
@@ -67,3 +74,33 @@ def test_crawl_site_wrapper_forwards_dedup_mode(
 
     assert captured["mode"] == "off"
     assert result.documents == []
+
+
+@pytest.mark.asyncio
+async def test_crawl_pages_async_forwards_auth_to_crawl_page(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    captured: list[ResolvedAuth | None] = []
+
+    storage_state = tmp_path / "state.json"
+    storage_state.write_text("{}", encoding="utf-8")
+
+    async def fake_crawl_page_async(url, *, config=None, dedup_mode="exact", auth=None):
+        captured.append(auth)
+        return SimpleNamespace(status="success", request_url=url)
+
+    monkeypatch.setattr(crawler, "crawl_page_async", fake_crawl_page_async)
+
+    docs = await crawler.crawl_pages_async(
+        ["https://a", "https://b"],
+        auth={"storage_state": str(storage_state)},
+    )
+
+    assert len(docs) == 2
+    resolved_items = [item for item in captured if isinstance(item, ResolvedAuth)]
+    assert len(resolved_items) == 2
+    assert [item.storage_state for item in resolved_items] == [
+        str(storage_state),
+        str(storage_state),
+    ]

@@ -192,6 +192,7 @@ async def crawl(
     concurrency: int = 3,
     remove_links: bool = False,
     dedup_mode: str = "exact",
+    storage_state: Optional[str] = None,
 ):
     """
     Crawl one or more web pages and extract their content as markdown.
@@ -204,6 +205,7 @@ async def crawl(
         concurrency: Maximum concurrent crawls (default: 3)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
+        storage_state: Path to Playwright storage_state JSON for authenticated crawling
 
     Returns:
         Crawled content in the specified format.
@@ -230,10 +232,11 @@ async def crawl(
         fmt = OutputFormat.markdown
 
     LOGGER.info("Crawling %d URL(s)...", len(urls))
+    auth = {"storage_state": storage_state} if storage_state else None
 
     if len(urls) == 1:
         try:
-            doc = await crawl_page_async(urls[0], dedup_mode=dedup_mode)
+            doc = await crawl_page_async(urls[0], dedup_mode=dedup_mode, auth=auth)
             docs = [doc]
         except Exception as exc:
             docs = [
@@ -250,6 +253,7 @@ async def crawl(
             urls,
             concurrency=concurrency,
             dedup_mode=dedup_mode,
+            auth=auth,
         )
 
     successful = sum(1 for d in docs if d.status == "success")
@@ -267,6 +271,7 @@ async def crawl_site(
     output_format: str = "markdown",
     remove_links: bool = False,
     dedup_mode: str = "exact",
+    storage_state: Optional[str] = None,
 ):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
@@ -281,6 +286,7 @@ async def crawl_site(
             - json: Full JSON with metadata, references, and crawl statistics
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
+        storage_state: Path to Playwright storage_state JSON for authenticated crawling
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -322,6 +328,7 @@ async def crawl_site(
         max_pages=max_pages,
         include_subdomains=include_subdomains,
         dedup_mode=dedup_mode,
+        auth={"storage_state": storage_state} if storage_state else None,
     )
 
     LOGGER.info(

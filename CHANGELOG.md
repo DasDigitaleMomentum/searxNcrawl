@@ -18,13 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `dedup_guardrail_checked`, `dedup_guardrail_triggered`, `dedup_guardrail_reason`
   - `dedup_guardrail_section_removal_rate`, `dedup_guardrail_section_rate_threshold`
 - Integration and regression test coverage for dedup behavior and parameter propagation across builder/API/CLI/MCP paths.
+- Authenticated crawling MVP with `storage_state` support across:
+  - CLI: `crawl --storage-state <path>`
+  - MCP tools: `crawl(..., storage_state=...)` and `crawl_site(..., storage_state=...)`
+  - Python API auth threading in page/pages/site crawl functions
+- Isolated session capture flow via `crawl-capture` with explicit outcomes (`success`, `timeout`, `abort`).
+- Auth/capture test coverage for resolver behavior, API/CLI/MCP auth propagation, and capture lifecycle.
 
 ### Fixed
-- Resolved real-world duplicate markdown blocks on `https://docs.agno.com/introduction` by improving exact dedup section segmentation around heading boundaries.
+- Resolved duplicate markdown blocks by improving exact dedup section segmentation around heading boundaries.
 
 ### Changed
 - Updated README documentation for dedup controls, defaults, metadata fields, and usage examples.
+- Updated README and module docs for authenticated crawling and isolated session capture usage.
 - Kept crawler extraction selectors/configuration unchanged while introducing dedup controls (no selector/config drift).
+- Preserved crawler extraction/runtime defaults while adding auth + capture support (no wait/SPA/persistent-session default drift).
 
 ## [0.1.1] - 2026-01-26
 

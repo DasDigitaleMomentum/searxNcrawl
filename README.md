@@ -230,6 +230,12 @@ For extended tests including new features (remove_links, Unicode handling, schem
 scripts/test-extended.sh
 ```
 
+For real-world regression checks (configurable URL list, including Mintlify-like docs):
+
+```
+scripts/test-regression.sh
+```
+
 ### MCP Tools
 
 #### `crawl`
@@ -249,6 +255,7 @@ Crawl one or more web pages and extract their content as markdown.
 | `auth_profile` | `str` | `null` | Path to persistent browser profile directory |
 | `delay` | `float` | `null` | Seconds to wait after page load (SPA/JS) |
 | `wait_until` | `str` | `null` | Wait event: `load`, `domcontentloaded`, `networkidle`, `commit` |
+| `aggressive_spa` | `bool` | `false` | Opt in to aggressive SPA fallback (reload + strict `main` wait) |
 
 **Output Formats:**
 - `markdown`: Clean concatenated markdown with URL headers and timestamps
@@ -304,6 +311,8 @@ Crawl an entire website starting from a seed URL using BFS strategy.
 | `auth_profile` | `str` | `null` | Path to persistent browser profile directory |
 | `delay` | `float` | `null` | Seconds to wait after page load (SPA/JS) |
 | `wait_until` | `str` | `null` | Wait event: `load`, `domcontentloaded`, `networkidle`, `commit` |
+| `aggressive_spa` | `bool` | `false` | Opt in to aggressive SPA fallback (reload + strict `main` wait) |
+| `site_stream` | `bool` | `false` | Enable crawl4ai streaming mode for BFS site crawl |
 
 **Examples:**
 ```
@@ -601,7 +610,8 @@ crawl https://protected.example.com
 
 ## SPA / JavaScript Rendering
 
-For single-page applications (SPAs) and JS-heavy sites, use the delay and wait strategy parameters:
+Default crawling is intentionally conservative and does **not** force page reloads or strict `<main>` checks.
+For SPA/JS-heavy sites, use delay/wait strategy first, and enable aggressive mode only if needed:
 
 ```bash
 # CLI: Wait 3 seconds after page load
@@ -612,6 +622,9 @@ crawl https://spa.example.com --wait-until networkidle
 
 # CLI: Combined (recommended for complex SPAs)
 crawl https://spa.example.com --delay 3 --wait-until networkidle
+
+# CLI: Last-resort fallback for difficult SPA pages
+crawl https://spa.example.com --aggressive-spa
 ```
 
 ```python
@@ -650,6 +663,9 @@ crawl https://example.com/page1 https://example.com/page2 -o output/
 # Site crawl
 crawl https://docs.example.com --site --max-depth 2 --max-pages 10 -o docs/
 
+# Site crawl with crawl4ai streaming enabled
+crawl https://docs.example.com --site --site-stream --max-pages 50
+
 # Output as JSON (includes metadata and references)
 crawl https://example.com --json
 
@@ -667,6 +683,9 @@ crawl --header "Authorization: Bearer xyz" https://api.example.com/docs
 
 # SPA with auth combined
 crawl --storage-state auth.json --delay 3 --wait-until networkidle https://spa.example.com
+
+# Aggressive SPA fallback (opt-in only)
+crawl https://spa.example.com --aggressive-spa
 
 # Verbose logging
 crawl https://example.com -v
@@ -766,7 +785,7 @@ doc = await crawl_page_async("https://example.com", config=config)
 
 Minimal dependencies:
 
-- `crawl4ai>=0.7.4` - The underlying crawler engine
+- `crawl4ai>=0.7.4,<0.8.0` - The underlying crawler engine (pinned to tested API range)
 - `tldextract>=5.1.2` - Domain parsing for site crawls
 - `playwright>=1.40.0` - Browser automation
 - `fastmcp>=2.0.0` - MCP server framework

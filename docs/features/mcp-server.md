@@ -47,12 +47,13 @@ mcp = FastMCP(name="Web Crawler & Search", instructions="...")
 @mcp.tool
 async def crawl(urls, output_format, concurrency, remove_links,
                 cookies, headers, storage_state, auth_profile,
-                delay, wait_until): ...
+                delay, wait_until, aggressive_spa): ...
 
 @mcp.tool
 async def crawl_site(url, max_depth, max_pages, include_subdomains,
                      output_format, remove_links, cookies, headers,
-                     storage_state, auth_profile, delay, wait_until): ...
+                     storage_state, auth_profile, delay, wait_until,
+                     aggressive_spa, site_stream): ...
 
 @mcp.tool
 async def search(query, language, time_range, categories, engines,
@@ -132,7 +133,7 @@ docker compose up --build
 ## Edge Cases & Limitations
 
 - **STDIO is default**: When no transport is specified, STDIO is used. This is the expected mode for MCP harnesses.
-- **No streaming**: Tool results are returned as a single string. Large site crawls may produce substantial output.
+- **Buffered output**: Tool results are returned as a single string. `crawl_site` exposes `site_stream` to control crawl4ai's streaming behavior during traversal.
 - **Auth fallback chain**: MCP tool auth params > environment variables > no auth. Explicit params always win.
 - **Error handling**: Crawl failures produce documents with `status="failed"` and `error_message` rather than raising errors to the MCP harness.
 - **SearXNG errors**: Search errors (HTTP errors, network failures) are returned as JSON error objects rather than protocol-level errors.

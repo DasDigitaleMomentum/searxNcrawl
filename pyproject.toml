@@ -5,7 +5,7 @@ description = "searxNcrawl web crawler with markdown extraction - no DB, no enri
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "crawl4ai>=0.7.4",
+    "crawl4ai>=0.7.4,<0.8.0",
     "tldextract>=5.1.2",
     "playwright>=1.40.0",
     "fastmcp>=2.0.0",

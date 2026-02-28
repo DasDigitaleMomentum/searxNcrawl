@@ -1,5 +1,5 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -29,7 +29,7 @@ echo "Initializing MCP session..."
 INIT_RESPONSE_HEADERS="$(mktemp)"
 INIT_RESPONSE_BODY="$(mktemp)"
 
-curl -sS -D "$INIT_RESPONSE_HEADERS" -o "$INIT_RESPONSE_BODY" \
+curl -fsS -D "$INIT_RESPONSE_HEADERS" -o "$INIT_RESPONSE_BODY" \
   -X POST "$BASE_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -48,13 +48,17 @@ echo "Session ID: $SESSION_ID"
 call_tool() {
   NAME="$1"
   PAYLOAD="$2"
+  RESPONSE_FILE="$(mktemp)"
   echo "Calling tool: $NAME"
-  curl -sS \
+  curl -fsS \
     -X POST "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     -H "Mcp-Session-Id: $SESSION_ID" \
-    -d "$PAYLOAD" | head -n 5
+    -d "$PAYLOAD" \
+    -o "$RESPONSE_FILE"
+  head -n 5 "$RESPONSE_FILE"
+  rm -f "$RESPONSE_FILE"
   echo ""
 }
 

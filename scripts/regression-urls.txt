@@ -1,0 +1,5 @@
+# Add URLs that previously regressed (one per line).
+# Lines starting with # are ignored.
+
+https://mintlify.com/docs
+https://developers.cloudflare.com/workers/

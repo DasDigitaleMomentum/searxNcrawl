@@ -65,7 +65,8 @@ search "AI news" --time-range week --language en --max-results 5
    - Detects `capture-auth` subcommand via `argv[0]` check.
    - Parses args via `_parse_crawl_args()` or `_parse_capture_auth_args()`.
    - Builds `AuthConfig` via `_build_cli_auth()` (CLI args > env vars).
-   - Builds `RunConfig` with SPA overrides if `--delay`/`--wait-until` set.
+   - Builds `RunConfig` with SPA overrides if `--delay`/`--wait-until`/`--aggressive-spa` set.
+   - Uses discovery config for site mode and markdown config for single/batch mode.
    - Dispatches to `crawl_page_async`, `crawl_pages_async`, or `crawl_site_async`.
    - Writes output via `_write_output()`:
      - Single doc, no `-o`: stdout
@@ -117,6 +118,8 @@ search "AI news" --time-range week --language en --max-results 5
 | `--remove-links` | flag | false | Strip links from markdown |
 | `--delay` | float | (none) | SPA delay seconds |
 | `--wait-until` | choice | (none) | load, domcontentloaded, networkidle, commit |
+| `--aggressive-spa` | flag | false | Opt in to reload + strict `main` wait |
+| `--site-stream` | flag | false | Enable crawl4ai `stream=True` for site crawl |
 | `-v, --verbose` | flag | false | Debug logging |
 | `--cookies` | str | (none) | JSON string or file path |
 | `--header` | repeatable | (none) | Custom HTTP header |

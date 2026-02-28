@@ -4,6 +4,7 @@ from crawl4ai import CrawlerRunConfig
 from crawl4ai.async_configs import CacheMode
 
 from crawler.config import (
+    AGGRESSIVE_SPA_WAIT_FOR,
     EXCLUDED_SELECTORS,
     MAIN_SELECTORS,
     RunConfigOverrides,
@@ -113,6 +114,13 @@ class TestBuildMarkdownRunConfig:
         assert isinstance(config, CrawlerRunConfig)
         assert config.cache_mode == CacheMode.BYPASS
         assert config.scan_full_page is True
+        assert config.js_code is None
+        assert config.wait_for is None
+
+    def test_aggressive_spa_config(self):
+        config = build_markdown_run_config(aggressive_spa=True)
+        assert config.js_code is not None
+        assert config.wait_for == AGGRESSIVE_SPA_WAIT_FOR
 
     def test_with_overrides(self):
         overrides = RunConfigOverrides(verbose=False, semaphore_count=10)
@@ -127,6 +135,11 @@ class TestBuildDiscoveryRunConfig:
         assert isinstance(config, CrawlerRunConfig)
         assert config.cache_mode == CacheMode.BYPASS
         assert config.magic is True
+
+    def test_aggressive_spa_config(self):
+        config = build_discovery_run_config(aggressive_spa=True)
+        assert config.js_code is not None
+        assert config.wait_for == AGGRESSIVE_SPA_WAIT_FOR
 
     def test_with_overrides(self):
         overrides = RunConfigOverrides(verbose=False)

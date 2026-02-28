@@ -82,7 +82,7 @@ def _parse_search_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 async def _run_crawl_async(args: argparse.Namespace) -> int:
     """Main async entry point for crawl."""
     from . import crawl_page_async, crawl_pages_async, crawl_site_async
-    from .config import build_markdown_run_config
+    from .config import build_discovery_run_config, build_markdown_run_config
 
     auth = _build_cli_auth(args)
     if auth:
@@ -91,14 +91,23 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
     run_config = None
     delay = getattr(args, "delay", None)
     wait_until = getattr(args, "wait_until", None)
-    if delay is not None or wait_until is not None:
-        run_config = build_markdown_run_config()
+    aggressive_spa = bool(getattr(args, "aggressive_spa", False))
+    needs_custom_config = (
+        delay is not None or wait_until is not None or aggressive_spa
+    )
+    if needs_custom_config:
+        if args.site:
+            run_config = build_discovery_run_config(aggressive_spa=aggressive_spa)
+        else:
+            run_config = build_markdown_run_config(aggressive_spa=aggressive_spa)
         if delay is not None:
             run_config.delay_before_return_html = delay
             logging.info("SPA delay: %.1fs after page load", delay)
         if wait_until is not None:
             run_config.wait_until = wait_until
             logging.info("Page wait strategy: %s", wait_until)
+        if aggressive_spa:
+            logging.info("Aggressive SPA mode enabled")
 
     docs: List[CrawledDocument] = []
 
@@ -120,6 +129,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
             include_subdomains=args.include_subdomains,
             auth=auth,
             run_config=run_config,
+            stream=bool(getattr(args, "site_stream", False)),
         )
         docs = result.documents
         logging.info(

@@ -16,7 +16,7 @@ from crawl4ai.deep_crawling.filters import DomainFilter
 
 from .auth import AuthConfig, build_browser_config
 from .builder import build_document_from_result
-from .config import build_markdown_run_config
+from .config import build_discovery_run_config
 from .document import CrawledDocument
 
 LOGGER = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class SiteCrawlOptions:
     max_depth: int = 2
     max_pages: int = 25
     include_subdomains: bool = False
-    stream: bool = True
+    stream: bool = False
 
 
 @dataclass
@@ -68,6 +68,7 @@ async def crawl_site_async(
     include_subdomains: bool = False,
     auth: Optional[AuthConfig] = None,
     run_config: Optional[CrawlerRunConfig] = None,
+    stream: Optional[bool] = None,
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -80,6 +81,9 @@ async def crawl_site_async(
         auth: Optional AuthConfig for authenticated crawling.
         run_config: Optional CrawlerRunConfig for custom crawl settings
             (e.g. SPA delay, wait_until). If None, uses default config.
+        stream: Optional override for crawl4ai streaming mode.
+            False keeps buffered, deterministic responses (default).
+            True enables streaming when supported by your crawl4ai version.
 
     Returns:
         SiteCrawlResult containing documents, errors, and stats.
@@ -100,23 +104,14 @@ async def crawl_site_async(
     filter_chain = FilterChain(filters) if filters else None
 
     # Configure the crawl
-    config = run_config if run_config is not None else build_markdown_run_config()
+    config = run_config if run_config is not None else build_discovery_run_config()
     config.deep_crawl_strategy = BFSDeepCrawlStrategy(
         max_depth=max_depth,
         max_pages=max_pages,
         filter_chain=filter_chain,
     )
-    # NOTE: stream must be False for BFS deep crawl.
-    #
-    # With stream=True, crawl4ai returns an async generator that yields 0 items
-    # despite successful crawls - this is a bug in crawl4ai's BFS implementation.
-    #
-    # With stream=False, crawl4ai waits for all pages to complete and returns
-    # a list of results. Trade-offs:
-    #   - Memory: All results held in RAM (acceptable for max_pages limit)
-    #   - Latency: Response only after last page (acceptable for MCP request/response)
-    #   - Reliability: Works correctly
-    config.stream = False
+    if stream is not None:
+        config.stream = stream
     config.exclude_external_links = not include_subdomains
 
     documents: List[CrawledDocument] = []
@@ -187,6 +182,7 @@ def crawl_site(
     include_subdomains: bool = False,
     auth: Optional[AuthConfig] = None,
     run_config: Optional[CrawlerRunConfig] = None,
+    stream: Optional[bool] = None,
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -197,6 +193,7 @@ def crawl_site(
             include_subdomains=include_subdomains,
             auth=auth,
             run_config=run_config,
+            stream=stream,
         )
     )
 

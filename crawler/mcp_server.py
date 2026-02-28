@@ -239,6 +239,7 @@ async def crawl(
     auth_profile: Optional[str] = None,
     delay: Optional[float] = None,
     wait_until: Optional[str] = None,
+    aggressive_spa: bool = False,
 ):
     """
     Crawl one or more web pages and extract their content as markdown.
@@ -264,6 +265,7 @@ async def crawl(
         wait_until: Optional page load event to wait for.
             One of: 'load', 'domcontentloaded', 'networkidle', 'commit'.
             Use 'networkidle' for SPA pages that fetch data via API calls.
+        aggressive_spa: Enable aggressive SPA fallback (reload + strict main wait).
 
     Returns:
         Crawled content in the specified format.
@@ -315,14 +317,16 @@ async def crawl(
 
     # Build run config with SPA overrides if specified
     run_config = None
-    if delay is not None or wait_until is not None:
-        run_config = build_markdown_run_config()
+    if delay is not None or wait_until is not None or aggressive_spa:
+        run_config = build_markdown_run_config(aggressive_spa=aggressive_spa)
         if delay is not None:
             run_config.delay_before_return_html = delay
             LOGGER.info("SPA delay: %.1fs after page load", delay)
         if wait_until is not None:
             run_config.wait_until = wait_until
             LOGGER.info("Page wait strategy: %s", wait_until)
+        if aggressive_spa:
+            LOGGER.info("Aggressive SPA mode enabled")
 
     LOGGER.info("Crawling %d URL(s)...", len(urls))
 
@@ -365,6 +369,8 @@ async def crawl_site(
     auth_profile: Optional[str] = None,
     delay: Optional[float] = None,
     wait_until: Optional[str] = None,
+    aggressive_spa: bool = False,
+    site_stream: bool = False,
 ):
     """
     Crawl an entire website starting from a seed URL using BFS strategy.
@@ -385,6 +391,8 @@ async def crawl_site(
             Essential for SPA/JS-rendered pages.
         wait_until: Optional page load event to wait for.
             One of: 'load', 'domcontentloaded', 'networkidle', 'commit'.
+        aggressive_spa: Enable aggressive SPA fallback (reload + strict main wait).
+        site_stream: Enable crawl4ai stream mode for BFS crawl.
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -409,7 +417,7 @@ async def crawl_site(
         )
     """
     from . import crawl_site_async
-    from .config import build_markdown_run_config
+    from .config import build_discovery_run_config
 
     # Validate output format
     try:
@@ -424,14 +432,16 @@ async def crawl_site(
 
     # Build run config with SPA overrides if specified
     run_config = None
-    if delay is not None or wait_until is not None:
-        run_config = build_markdown_run_config()
+    if delay is not None or wait_until is not None or aggressive_spa:
+        run_config = build_discovery_run_config(aggressive_spa=aggressive_spa)
         if delay is not None:
             run_config.delay_before_return_html = delay
             LOGGER.info("SPA delay: %.1fs after page load", delay)
         if wait_until is not None:
             run_config.wait_until = wait_until
             LOGGER.info("Page wait strategy: %s", wait_until)
+        if aggressive_spa:
+            LOGGER.info("Aggressive SPA mode enabled")
 
     LOGGER.info(
         "Starting site crawl: %s (max_depth=%d, max_pages=%d)",
@@ -447,6 +457,7 @@ async def crawl_site(
         include_subdomains=include_subdomains,
         auth=auth,
         run_config=run_config,
+        stream=site_stream,
     )
 
     LOGGER.info(

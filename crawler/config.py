@@ -13,6 +13,15 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 LOGGER = logging.getLogger(__name__)
 
+AGGRESSIVE_SPA_JS_CODE = """
+    window.location.reload();
+    setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 500);
+"""
+AGGRESSIVE_SPA_WAIT_FOR = (
+    "js:() => document.querySelector('main') && "
+    "document.querySelector('main').innerText.trim().length > 50"
+)
+
 # Selectors for main content areas (documentation sites, articles, etc.)
 MAIN_SELECTORS: List[str] = [
     "main",
@@ -156,6 +165,8 @@ def build_markdown_generator() -> DefaultMarkdownGenerator:
 
 def build_markdown_run_config(
     overrides: Optional[RunConfigOverrides] = None,
+    *,
+    aggressive_spa: bool = False,
 ) -> CrawlerRunConfig:
     """RunConfig for single-page crawls, optimized for main content extraction."""
     generator = build_markdown_generator()
@@ -171,12 +182,10 @@ def build_markdown_run_config(
         markdown_generator=generator,
         cache_mode=CacheMode.BYPASS,
         scan_full_page=True,
-        js_code="""
-            window.location.reload();
-            setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 500);
-        """,
-        wait_for="js:() => document.querySelector('main') && document.querySelector('main').innerText.trim().length > 50",
     )
+    if aggressive_spa:
+        config.js_code = AGGRESSIVE_SPA_JS_CODE
+        config.wait_for = AGGRESSIVE_SPA_WAIT_FOR
     if overrides:
         _apply_overrides(config, overrides)
     return config
@@ -184,6 +193,8 @@ def build_markdown_run_config(
 
 def build_discovery_run_config(
     overrides: Optional[RunConfigOverrides] = None,
+    *,
+    aggressive_spa: bool = False,
 ) -> CrawlerRunConfig:
     """Configuration focused on link discovery for site crawling."""
     generator = build_markdown_generator()
@@ -203,6 +214,9 @@ def build_discovery_run_config(
         excluded_selector=", ".join(EXCLUDED_SELECTORS),
         ignore_body_visibility=False,
     )
+    if aggressive_spa:
+        config.js_code = AGGRESSIVE_SPA_JS_CODE
+        config.wait_for = AGGRESSIVE_SPA_WAIT_FOR
     if overrides:
         _apply_overrides(config, overrides)
     return config

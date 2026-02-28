@@ -101,6 +101,11 @@ class TestUrlToFilename:
         name = _url_to_filename(url)
         assert len(name) <= 100
 
+    def test_query_and_fragment_change_filename(self):
+        name_a = _url_to_filename("https://example.com/search?q=foo#intro")
+        name_b = _url_to_filename("https://example.com/search?q=bar#intro")
+        assert name_a != name_b
+
 
 class TestWriteOutput:
     def test_single_doc_stdout(self, capsys):
@@ -351,6 +356,13 @@ class TestParseCrawlArgs:
         )
         assert args.storage_state == "state.json"
 
+    def test_spa_flags(self):
+        args = _parse_crawl_args(
+            ["https://example.com", "--aggressive-spa", "--site-stream"]
+        )
+        assert args.aggressive_spa is True
+        assert args.site_stream is True
+
     def test_none_argv_uses_sys_argv(self):
         with patch("sys.argv", ["crawl", "https://example.com"]):
             args = _parse_crawl_args()
@@ -586,6 +598,73 @@ class TestRunCrawlAsync:
                 assert call_kwargs["run_config"] is not None
                 assert call_kwargs["run_config"].delay_before_return_html == 3.0
                 assert call_kwargs["run_config"].wait_until == "networkidle"
+                assert call_kwargs["run_config"].magic is True
+
+    @pytest.mark.asyncio
+    async def test_site_crawl_with_stream_flag(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.cli import _run_crawl_async
+
+        from crawler.site import SiteCrawlResult
+
+        doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        mock_result = SiteCrawlResult(
+            documents=[doc],
+            stats={"total_pages": 1, "successful_pages": 1, "failed_pages": 0},
+        )
+        args = argparse.Namespace(
+            urls=["https://example.com"],
+            site=True,
+            max_depth=2,
+            max_pages=25,
+            include_subdomains=False,
+            json_output=False,
+            output=None,
+            remove_links=False,
+            verbose=False,
+            site_stream=True,
+        )
+        with patch("crawler.cli.load_auth_from_env", return_value=None):
+            with patch(
+                "crawler.crawl_site_async",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_site_crawl:
+                result = await _run_crawl_async(args)
+                assert result == 0
+                assert mock_site_crawl.call_args[1]["stream"] is True
+
+    @pytest.mark.asyncio
+    async def test_single_url_aggressive_spa(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.cli import _run_crawl_async
+
+        doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        args = argparse.Namespace(
+            urls=["https://example.com"],
+            site=False,
+            json_output=False,
+            output=None,
+            remove_links=False,
+            verbose=False,
+            concurrency=3,
+            aggressive_spa=True,
+        )
+        with patch("crawler.cli.load_auth_from_env", return_value=None):
+            with patch(
+                "crawler.crawl_page_async",
+                new_callable=AsyncMock,
+                return_value=doc,
+            ) as mock_page_crawl:
+                result = await _run_crawl_async(args)
+                assert result == 0
+                run_config = mock_page_crawl.call_args[1]["config"]
+                assert run_config.js_code is not None
+                assert run_config.wait_for is not None
 
     @pytest.mark.asyncio
     async def test_site_crawl_multiple_urls_error(self):

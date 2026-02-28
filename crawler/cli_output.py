@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from hashlib import sha1
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -68,12 +69,29 @@ def doc_to_dict(doc: CrawledDocument) -> dict:
     }
 
 
+def _slugify(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
+
+
 def url_to_filename(url: str) -> str:
-    """Convert URL to a safe filename."""
+    """Convert URL to a deterministic, collision-safe filename."""
     parsed = urlparse(url)
-    path = parsed.path.strip("/").replace("/", "_") or "index"
-    host = parsed.netloc.replace(":", "_").replace(".", "_")
-    return f"{host}_{path}"[:100]
+    host = _slugify(parsed.netloc.replace(":", "_").replace(".", "_")) or "site"
+    path = _slugify(parsed.path.strip("/").replace("/", "_")) or "index"
+    query = _slugify(parsed.query)
+    fragment = _slugify(parsed.fragment)
+
+    parts = [host, path]
+    if query:
+        parts.extend(["q", query[:24]])
+    if fragment:
+        parts.extend(["f", fragment[:24]])
+
+    digest = sha1(url.encode("utf-8")).hexdigest()[:12]
+    stem = "_".join(part for part in parts if part)
+    max_stem_len = 100 - len(digest) - 1
+    stem = stem[:max_stem_len].rstrip("_")
+    return f"{stem}_{digest}"
 
 
 def write_output(
@@ -127,7 +145,11 @@ def write_output(
         logging.info("Wrote %d documents to %s", len(docs), out_path)
     else:
         for doc in docs:
-            filename = url_to_filename(doc.final_url) + ".md"
+            parsed_request = urlparse(doc.request_url or "")
+            source_url = (
+                doc.request_url if parsed_request.netloc else doc.final_url
+            )
+            filename = url_to_filename(source_url) + ".md"
             path = out_dir / filename
             path.write_text(doc.markdown)
             logging.info("Wrote %s", path)

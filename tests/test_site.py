@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from crawl4ai import CrawlerRunConfig
 
 from crawler.site import (
     SiteCrawlResult,
@@ -74,6 +75,37 @@ class TestIterateResults:
 
 
 class TestCrawlSiteAsync:
+    @pytest.mark.asyncio
+    async def test_site_uses_discovery_config_by_default(self):
+        run_config = CrawlerRunConfig()
+        with patch("crawler.site.build_discovery_run_config", return_value=run_config):
+            with patch("crawler.site.AsyncWebCrawler") as MockCrawler:
+                mock_instance = AsyncMock()
+                mock_instance.arun = AsyncMock(return_value=[])
+                mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+                mock_instance.__aexit__ = AsyncMock(return_value=None)
+                MockCrawler.return_value = mock_instance
+
+                await crawl_site_async("https://example.com")
+                assert mock_instance.arun.call_args[1]["config"] is run_config
+
+    @pytest.mark.asyncio
+    async def test_site_stream_override(self):
+        run_config = CrawlerRunConfig(stream=False)
+        with patch("crawler.site.AsyncWebCrawler") as MockCrawler:
+            mock_instance = AsyncMock()
+            mock_instance.arun = AsyncMock(return_value=[])
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock(return_value=None)
+            MockCrawler.return_value = mock_instance
+
+            await crawl_site_async(
+                "https://example.com",
+                run_config=run_config,
+                stream=True,
+            )
+            assert mock_instance.arun.call_args[1]["config"].stream is True
+
     @pytest.mark.asyncio
     async def test_basic_site_crawl(self):
         mock_doc = MagicMock()

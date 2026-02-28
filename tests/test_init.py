@@ -101,27 +101,52 @@ class TestCrawlPagesAsync:
     @pytest.mark.asyncio
     async def test_multiple_urls(self):
         """Test crawling multiple URLs."""
-        mock_doc = CrawledDocument(
-            request_url="u", final_url="u", status="success", markdown="m"
+        mock_doc_a = CrawledDocument(
+            request_url="https://a.com",
+            final_url="https://a.com",
+            status="success",
+            markdown="A",
+        )
+        mock_doc_b = CrawledDocument(
+            request_url="https://b.com",
+            final_url="https://b.com",
+            status="success",
+            markdown="B",
         )
 
-        with patch("crawler.crawl_page_async", new_callable=AsyncMock) as mock_crawl:
-            mock_crawl.return_value = mock_doc
-            from crawler import crawl_pages_async
+        mock_result_a = MagicMock()
+        mock_result_a.url = "https://a.com"
+        mock_result_b = MagicMock()
+        mock_result_b.url = "https://b.com"
 
-            docs = await crawl_pages_async(
-                ["https://a.com", "https://b.com"]
-            )
-            assert len(docs) == 2
+        with patch("crawler.AsyncWebCrawler") as MockCrawler:
+            mock_instance = AsyncMock()
+            mock_instance.arun_many = AsyncMock(return_value=[mock_result_a, mock_result_b])
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock(return_value=None)
+            MockCrawler.return_value = mock_instance
+
+            with patch(
+                "crawler.build_document_from_result",
+                side_effect=[mock_doc_a, mock_doc_b],
+            ):
+                from crawler import crawl_pages_async
+
+                docs = await crawl_pages_async(["https://a.com", "https://b.com"])
+                assert len(docs) == 2
+                assert docs[0].request_url == "https://a.com"
+                assert docs[1].request_url == "https://b.com"
 
     @pytest.mark.asyncio
     async def test_failed_crawl_returns_failed_doc(self):
         """Test that exceptions are caught and returned as failed docs."""
-        with patch(
-            "crawler.crawl_page_async",
-            new_callable=AsyncMock,
-            side_effect=Exception("boom"),
-        ):
+        with patch("crawler.AsyncWebCrawler") as MockCrawler:
+            mock_instance = AsyncMock()
+            mock_instance.arun_many = AsyncMock(side_effect=Exception("boom"))
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock(return_value=None)
+            MockCrawler.return_value = mock_instance
+
             from crawler import crawl_pages_async
 
             docs = await crawl_pages_async(["https://fail.com"])

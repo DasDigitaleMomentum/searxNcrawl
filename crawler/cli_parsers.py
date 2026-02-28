@@ -79,6 +79,17 @@ def _add_crawl_args(
         help="Page load event to wait for (default: load). "
              "Use 'networkidle' for SPA pages that fetch data via API calls",
     )
+    spa_group.add_argument(
+        "--aggressive-spa",
+        action="store_true",
+        help="Opt in to aggressive SPA handling (reload + strict main-content wait). "
+             "Use only for pages that otherwise render incomplete content.",
+    )
+    parser.add_argument(
+        "--site-stream",
+        action="store_true",
+        help="Enable streaming mode for site crawl (uses crawl4ai stream=True).",
+    )
 
     parser.add_argument(
         "-v",
@@ -163,11 +174,17 @@ Examples:
   # SPA / JS-rendered pages (wait for content to load)
   crawl https://spa.example.com --delay 3 --wait-until networkidle
 
+  # Aggressive SPA fallback (reload + strict main wait)
+  crawl https://spa.example.com --aggressive-spa
+
   # Authenticated crawl with storage state
   crawl --storage-state auth_state.json https://protected.example.com
 
   # Combined: authenticated SPA crawl
   crawl --storage-state auth.json --delay 3 --wait-until networkidle https://spa.example.com
+
+  # Site crawl with streaming enabled
+  crawl https://docs.example.com --site --site-stream
 
   # Capture auth session interactively
   crawl capture-auth --url https://login.example.com --output auth_state.json
@@ -304,6 +321,12 @@ Examples:
         type=int,
         default=10,
         help="Maximum results to return (default: 10)",
+    )
+    parser.add_argument(
+        "--pageno",
+        type=int,
+        default=1,
+        help="Result page number (default: 1)",
     )
     parser.add_argument(
         "-o",

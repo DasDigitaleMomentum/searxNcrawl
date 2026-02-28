@@ -377,6 +377,29 @@ class TestCrawlTool:
             assert run_config is not None
             assert run_config.delay_before_return_html == 3.0
             assert run_config.wait_until == "networkidle"
+            assert run_config.js_code is None
+
+    @pytest.mark.asyncio
+    async def test_crawl_with_aggressive_spa(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl
+
+        mock_doc = CrawledDocument(
+            request_url="u", final_url="u", status="success", markdown="C"
+        )
+        with patch(
+            "crawler.crawl_page_async",
+            new_callable=AsyncMock,
+            return_value=mock_doc,
+        ) as mock_crawl:
+            result = await crawl(
+                urls=["https://a.com"],
+                aggressive_spa=True,
+            )
+            assert isinstance(result, str)
+            run_config = mock_crawl.call_args[1]["config"]
+            assert run_config.js_code is not None
+            assert run_config.wait_for is not None
 
     @pytest.mark.asyncio
     async def test_crawl_multiple_with_spa_params(self):
@@ -531,6 +554,30 @@ class TestCrawlSiteTool:
             assert call_kwargs["run_config"] is not None
             assert call_kwargs["run_config"].delay_before_return_html == 5.0
             assert call_kwargs["run_config"].wait_until == "networkidle"
+            assert call_kwargs["run_config"].magic is True
+
+    @pytest.mark.asyncio
+    async def test_crawl_site_with_stream(self):
+        with patch("dotenv.load_dotenv"):
+            from crawler.mcp_server import crawl_site
+
+        from crawler.site import SiteCrawlResult
+
+        mock_result = SiteCrawlResult(
+            documents=[],
+            stats={
+                "total_pages": 0,
+                "successful_pages": 0,
+                "failed_pages": 0,
+            },
+        )
+        with patch(
+            "crawler.crawl_site_async",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_crawl:
+            await crawl_site(url="https://example.com", site_stream=True)
+            assert mock_crawl.call_args[1]["stream"] is True
 
 
 class TestListAuthProfilesTool:

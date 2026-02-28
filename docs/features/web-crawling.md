@@ -27,13 +27,12 @@ Web crawling is the core feature of searxNcrawl. It renders web pages with a hea
 #### Single Page
 
 1. `crawl_page_async(url, config, auth)` is called (`crawler/__init__.py:95`).
-2. A `CrawlerRunConfig` is built via `build_markdown_run_config()` (`config.py:157`) with:
+2. A `CrawlerRunConfig` is built via `build_markdown_run_config()` (`config.py`) with:
    - Target elements: `MAIN_SELECTORS` (main, article, .content, etc.)
    - Excluded elements: `EXCLUDED_SELECTORS` (nav, footer, cookie banners)
    - Pruning content filter (threshold 0.45, dynamic)
-   - JS: page reload + scroll to bottom
-   - Wait-for: main element with >50 chars of text
    - Cache: bypass
+   - Optional aggressive SPA fallback (reload + strict main wait) as explicit opt-in
 3. A `BrowserConfig` is built via `build_browser_config(auth)` (`auth.py:102`).
 4. `AsyncWebCrawler.arun(url, config)` launches Chromium, renders the page.
 5. The `CrawlResult` is translated to `CrawledDocument` by `build_document_from_result()` (`builder.py:15`):
@@ -44,18 +43,18 @@ Web crawling is the core feature of searxNcrawl. It renders web pages with a hea
 
 #### Multi-Page Batch
 
-1. `crawl_pages_async(urls, config, auth, concurrency)` is called (`__init__.py:141`).
-2. An `asyncio.Semaphore(concurrency)` limits parallel crawls.
-3. Each URL is crawled via `crawl_page_async()` inside the semaphore.
+1. `crawl_pages_async(urls, config, auth, concurrency)` is called (`__init__.py`).
+2. A single `AsyncWebCrawler` is created for the full batch.
+3. `AsyncWebCrawler.arun_many()` executes URLs with `SemaphoreDispatcher(semaphore_count=concurrency)`.
 4. Failed crawls produce a `CrawledDocument` with `status="failed"` instead of raising.
-5. Results are returned in the same order as input URLs.
+5. Results are mapped back to input URL order.
 
 #### BFS Site Crawl
 
 1. `crawl_site_async(url, max_depth, max_pages, include_subdomains, auth, run_config)` is called (`site.py:63`).
 2. The seed URL's domain is parsed; `DomainFilter` restricts links to same domain (optionally with subdomains).
 3. A `BFSDeepCrawlStrategy` is attached to the run config with depth/page limits.
-4. `stream=False` is forced (crawl4ai BFS streaming has a known bug).
+4. `stream` defaults to buffered mode (`False`) for deterministic responses, but can be enabled via CLI/MCP override.
 5. `AsyncWebCrawler.arun()` performs the complete BFS traversal.
 6. `_iterate_results()` normalises the result into an async iterable.
 7. Each result is converted to `CrawledDocument`; duplicates are filtered by `request_url`.
@@ -83,13 +82,15 @@ Web crawling is the core feature of searxNcrawl. It renders web pages with a hea
 | Max pages | `--max-pages` | `max_pages` | `25` | BFS page limit |
 | Include subdomains | `--include-subdomains` | `include_subdomains` | `false` | Allow subdomain URLs in site crawl |
 | Concurrency | `--concurrency` | `concurrency` | `3` | Max parallel crawls for batch mode |
-| SPA delay | `--delay` | `delay` | `0.5` | Seconds to wait after page load |
-| Wait strategy | `--wait-until` | `wait_until` | `load` | Playwright wait event (load, domcontentloaded, networkidle, commit) |
+| SPA delay | `--delay` | `delay` | `null` | Optional seconds to wait after page load |
+| Wait strategy | `--wait-until` | `wait_until` | `null` | Optional Playwright wait event (load, domcontentloaded, networkidle, commit) |
+| Aggressive SPA | `--aggressive-spa` | `aggressive_spa` | `false` | Opt in to reload + strict `main` wait |
+| Site streaming | `--site-stream` | `site_stream` | `false` | Enable crawl4ai streaming mode for BFS crawl |
 
 ## Edge Cases & Limitations
 
-- **SPA / JS-heavy pages**: Default config waits for `<main>` element with >50 chars. For SPAs that load data asynchronously, use `--delay` and `--wait-until networkidle`.
-- **crawl4ai BFS streaming bug**: `stream=True` returns 0 results with BFS strategy. The code forces `stream=False`, meaning all results are held in RAM until the crawl completes. This is acceptable given the `max_pages` limit.
+- **SPA / JS-heavy pages**: Default config is conservative. For async-rendered content, first use `--delay` + `--wait-until networkidle`. Use `--aggressive-spa` only as fallback.
+- **BFS streaming trade-off**: `stream=False` buffers results in memory; `--site-stream` can reduce memory pressure on large crawls, depending on crawl4ai behavior/version.
 - **Markdown quality**: The pruning filter (threshold 0.45) may occasionally cut relevant content or include noise. The priority chain (fit_markdown > citations > raw) provides fallback.
 - **Domain filtering**: Uses `tldextract` for registrable domain matching. Edge cases with unusual TLDs or IP-based URLs may not filter correctly.
 - **No JavaScript interaction**: Pages requiring form submission or clicks beyond initial load are not supported (use `capture-auth` for login flows).

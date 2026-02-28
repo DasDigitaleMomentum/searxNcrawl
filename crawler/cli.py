@@ -63,7 +63,12 @@ def _load_config() -> None:
 _load_config()
 
 from .document import CrawledDocument
-from .session_capture import capture_session_async
+from .session_capture import (
+    CdpSessionEntry,
+    capture_session_async,
+    export_cdp_storage_state_async,
+    list_cdp_sessions_async,
+)
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -431,12 +436,21 @@ def main(argv: Optional[List[str]] = None) -> int:
 def _parse_capture_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="crawl-capture",
-        description="Capture Playwright storage_state via manual login.",
+        description=(
+            "Capture Playwright storage_state either via manual login flow "
+            "or by exporting from a running CDP browser session."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   # Open login page and capture when redirected to dashboard
   crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/dashboard.*' --output ./state.json
+
+  # List selectable sessions from a running browser started with --remote-debugging-port
+  crawl-capture --cdp-url http://127.0.0.1:9222 --list-sessions
+
+  # Export selected CDP session storage state
+  crawl-capture --cdp-url http://127.0.0.1:9222 --cdp-session 2 --output ./state.json
 
   # Overwrite existing state file
   crawl-capture --start-url https://example.com/login --completion-url 'https://example.com/app.*' --output ./state.json --overwrite
@@ -452,14 +466,36 @@ Examples:
     parser.add_argument(
         "--completion-url",
         type=str,
-        required=True,
+        default=None,
         help="Regex pattern that marks successful capture when current URL matches",
     )
     parser.add_argument(
         "--output",
         type=str,
-        required=True,
+        default=None,
         help="Target path for captured storage_state JSON",
+    )
+    parser.add_argument(
+        "--cdp-url",
+        type=str,
+        default=None,
+        help="CDP endpoint for existing browser (e.g. http://127.0.0.1:9222)",
+    )
+    parser.add_argument(
+        "--list-sessions",
+        action="store_true",
+        help="List selectable CDP sessions and exit (or combine with --output to continue)",
+    )
+    parser.add_argument(
+        "--cdp-session",
+        type=int,
+        default=None,
+        help="Session index from --list-sessions output to export",
+    )
+    parser.add_argument(
+        "--select",
+        action="store_true",
+        help="Interactively select session index from listed CDP sessions",
     )
     parser.add_argument(
         "--timeout",
@@ -487,14 +523,140 @@ Examples:
     return parser.parse_args(argv)
 
 
+def _format_cdp_session(entry: CdpSessionEntry, session_index: int) -> str:
+    url = entry.url or "(no active page URL)"
+    title = f" | title={entry.title}" if entry.title else ""
+    if entry.page_index is None:
+        return (
+            f"[{session_index}] context={entry.context_index}, page=<none>"
+            f" | url={url}{title}"
+        )
+    return (
+        f"[{session_index}] context={entry.context_index}, page={entry.page_index}"
+        f" | url={url}{title}"
+    )
+
+
+def _print_cdp_sessions(sessions: List[CdpSessionEntry]) -> None:
+    if not sessions:
+        print("No selectable CDP sessions found.")
+        return
+
+    print("Selectable CDP sessions:")
+    for idx, session in enumerate(sessions):
+        print(f"  {_format_cdp_session(session, idx)}")
+
+
+def _select_cdp_session_interactive(sessions: List[CdpSessionEntry]) -> int:
+    if not sessions:
+        raise ValueError("No selectable CDP sessions available")
+
+    while True:
+        raw = input("Select session index: ").strip()
+        if not raw:
+            print("Please enter a numeric index.")
+            continue
+        try:
+            idx = int(raw)
+        except ValueError:
+            print("Invalid index. Enter a number from the list.")
+            continue
+
+        if 0 <= idx < len(sessions):
+            return idx
+        print(f"Index out of range. Valid range: 0..{len(sessions) - 1}")
+
+
+def _resolve_cdp_session_index(
+    args: argparse.Namespace, sessions: List[CdpSessionEntry]
+) -> int:
+    if args.cdp_session is not None:
+        if 0 <= args.cdp_session < len(sessions):
+            return int(args.cdp_session)
+        raise ValueError(
+            f"--cdp-session out of range: {args.cdp_session} "
+            f"(valid: 0..{len(sessions) - 1})"
+        )
+
+    if args.select:
+        return _select_cdp_session_interactive(sessions)
+
+    if len(sessions) == 1:
+        return 0
+
+    raise ValueError(
+        "Multiple CDP sessions found. Use --cdp-session <index> "
+        "or --select (optionally with --list-sessions)."
+    )
+
+
 async def _run_capture_async(args: argparse.Namespace) -> int:
+    cdp_url = getattr(args, "cdp_url", None)
+    completion_url = getattr(args, "completion_url", None)
+    output = getattr(args, "output", None)
+    start_url = getattr(args, "start_url", None)
+    timeout = float(getattr(args, "timeout", 300.0))
+    overwrite = bool(getattr(args, "overwrite", False))
+    headless = bool(getattr(args, "headless", False))
+    list_sessions = bool(getattr(args, "list_sessions", False))
+    cdp_session = getattr(args, "cdp_session", None)
+    select = bool(getattr(args, "select", False))
+
+    if cdp_url:
+        if completion_url:
+            raise ValueError(
+                "--completion-url cannot be combined with --cdp-url; "
+                "CDP export reads an existing browser session."
+            )
+
+        sessions = await list_cdp_sessions_async(cdp_url)
+
+        if list_sessions:
+            _print_cdp_sessions(sessions)
+            if not output:
+                return 0
+
+        if not output:
+            raise ValueError("--output is required when exporting from CDP")
+
+        if not sessions:
+            raise ValueError(
+                "No selectable CDP sessions found. Open at least one tab in the browser first."
+            )
+
+        cdp_args = argparse.Namespace(cdp_session=cdp_session, select=select)
+        selected_index = _resolve_cdp_session_index(cdp_args, sessions)
+        selected = sessions[selected_index]
+        result = await export_cdp_storage_state_async(
+            output,
+            cdp_url=cdp_url,
+            context_index=selected.context_index,
+            overwrite=overwrite,
+        )
+        logging.info(
+            "CDP export success: %s (session=%d, context=%d)",
+            result.storage_state_path,
+            selected_index,
+            selected.context_index,
+        )
+        return 0
+
+    if list_sessions or cdp_session is not None or select:
+        raise ValueError("--list-sessions/--cdp-session/--select require --cdp-url")
+
+    if not completion_url:
+        raise ValueError("--completion-url is required for manual login capture")
+
+    if not output:
+        raise ValueError("--output is required for manual login capture")
+
     result = await capture_session_async(
-        args.output,
-        completion_url_pattern=args.completion_url,
-        start_url=args.start_url,
-        timeout_seconds=args.timeout,
-        overwrite=args.overwrite,
-        headless=args.headless,
+        output,
+        completion_url_pattern=completion_url,
+        start_url=start_url,
+        timeout_seconds=timeout,
+        overwrite=overwrite,
+        headless=headless,
     )
 
     if result.status == "success":

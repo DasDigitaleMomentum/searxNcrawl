@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-28
+
 ### Added
 - Switchable markdown dedup mode across crawl surfaces:
   - CLI: `crawl --dedup-mode {exact,off}` (default: `exact`)
@@ -23,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - MCP tools: `crawl(..., storage_state=...)` and `crawl_site(..., storage_state=...)`
   - Python API auth threading in page/pages/site crawl functions
 - Isolated session capture flow via `crawl-capture` with explicit outcomes (`success`, `timeout`, `abort`).
+- CDP-based session export flow in `crawl-capture` for real Chrome/Chromium sessions:
+  - `--cdp-url` to connect to an existing browser started with `--remote-debugging-port`
+  - `--list-sessions` to enumerate selectable sessions in CLI
+  - `--cdp-session <index>` for deterministic export selection
+  - `--select` for interactive CLI selection before export
+  - Compatible with login providers that often block automated-browser sign-in (for example Google)
 - Auth/capture test coverage for resolver behavior, API/CLI/MCP auth propagation, and capture lifecycle.
 
 ### Fixed
@@ -31,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated README documentation for dedup controls, defaults, metadata fields, and usage examples.
 - Updated README and module docs for authenticated crawling and isolated session capture usage.
+- Expanded README intro/features to highlight CDP-assisted auth capture as part of the authenticated crawling story.
+- Added step-by-step user guidance for both capture modes:
+  - manual capture flow (`--start-url` + `--completion-url`)
+  - running-browser CDP export flow (`--cdp-url` + list/select/export)
 - Kept crawler extraction selectors/configuration unchanged while introducing dedup controls (no selector/config drift).
 - Preserved crawler extraction/runtime defaults while adding auth + capture support (no wait/SPA/persistent-session default drift).
 

@@ -5,35 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-02-26
+## [Unreleased]
 
 ### Added
-- **Authenticated Crawling** - Crawl pages behind login walls (OAuth, SSO, MFA)
-  - Cookies injection: Pass session cookies directly
-  - Custom headers: Add `Authorization: Bearer` or any custom headers
-  - Storage state: Reuse Playwright browser state (cookies + localStorage)
-  - Persistent browser profiles: Use saved browser profiles
-- **`capture-auth` CLI subcommand** - Interactive session capture
-  - Opens a headed browser for manual login
-  - Exports storage state JSON for reuse
-  - Optional `--wait-for-url` regex for auto-capture
-- **MCP Tool auth params** - `cookies`, `headers`, `storage_state` on `crawl()` and `crawl_site()`
-- **`list_auth_profiles` MCP tool** - List available persistent browser profiles
-- **CLI auth flags** - `--cookies`, `--header`, `--storage-state`, `--auth-profile`
-- **Environment variable auth** - `CRAWL_AUTH_STORAGE_STATE`, `CRAWL_AUTH_COOKIES_FILE`, `CRAWL_AUTH_PROFILE`
-- **New modules:**
-  - `crawler/auth.py` - AuthConfig dataclass and BrowserConfig builder
-  - `crawler/capture.py` - Interactive session capture tool
-  - `crawler/search.py` - Shared SearXNG search implementation
-- **Python API search** - `search_async()` and `search()` convenience functions with full SearXNG parameter support, returning structured `SearchResult` dataclass
-- **CLI `--pageno`** - Pagination support for the `search` command
-- **`SearchResult` / `SearchResultItem` dataclasses** - Structured search result types for the Python API
-- **E2E integration tests** - End-to-end test suite covering crawl, search, CLI, and auth flows
+- Switchable markdown dedup mode across crawl surfaces:
+  - CLI: `crawl --dedup-mode {exact,off}` (default: `exact`)
+  - MCP tools: `crawl(..., dedup_mode=...)` and `crawl_site(..., dedup_mode=...)`
+  - Python API: `crawl_page(_async)`, `crawl_pages(_async)`, and `crawl_site(_async)` accept `dedup_mode`
+- New exact intra-document markdown dedup core with per-document dedup metrics in metadata:
+  - `dedup_mode`, `dedup_sections_total`, `dedup_sections_removed`, `dedup_chars_removed`, `dedup_applied`
+- Non-destructive dedup guardrail metadata and warning signal fields:
+  - `dedup_guardrail_checked`, `dedup_guardrail_triggered`, `dedup_guardrail_reason`
+  - `dedup_guardrail_section_removal_rate`, `dedup_guardrail_section_rate_threshold`
+- Integration and regression test coverage for dedup behavior and parameter propagation across builder/API/CLI/MCP paths.
+- Authenticated crawling MVP with `storage_state` support across:
+  - CLI: `crawl --storage-state <path>`
+  - MCP tools: `crawl(..., storage_state=...)` and `crawl_site(..., storage_state=...)`
+  - Python API auth threading in page/pages/site crawl functions
+- Isolated session capture flow via `crawl-capture` with explicit outcomes (`success`, `timeout`, `abort`).
+- Auth/capture test coverage for resolver behavior, API/CLI/MCP auth propagation, and capture lifecycle.
+
+### Fixed
+- Resolved duplicate markdown blocks by improving exact dedup section segmentation around heading boundaries.
 
 ### Changed
-- Search logic extracted from `mcp_server.py` into shared `crawler/search.py` module, eliminating duplication across MCP, CLI, and Python API
-
----
+- Updated README documentation for dedup controls, defaults, metadata fields, and usage examples.
+- Updated README and module docs for authenticated crawling and isolated session capture usage.
+- Kept crawler extraction selectors/configuration unchanged while introducing dedup controls (no selector/config drift).
+- Preserved crawler extraction/runtime defaults while adding auth + capture support (no wait/SPA/persistent-session default drift).
 
 ## [0.1.1] - 2026-01-26
 

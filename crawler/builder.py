@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Dict, Optional
+import logging
+from typing import Any, Dict, Optional, cast
 
 from crawl4ai.models import CrawlResult, MarkdownGenerationResult
 
 from .config import build_markdown_generator
 from .document import CrawledDocument
+from .markdown_dedup import DedupMode, dedup_markdown
 from .references import parse_references
 
+LOGGER = logging.getLogger(__name__)
 
-def build_document_from_result(result: CrawlResult) -> CrawledDocument:
+_GUARDRAIL_SECTION_RATE_WARN = 0.45
+_GUARDRAIL_MIN_SECTIONS = 4
+_GUARDRAIL_MIN_REMOVED = 2
+
+
+def build_document_from_result(
+    result: CrawlResult, *, dedup_mode: str = "exact"
+) -> CrawledDocument:
     """Convert a Crawl4AI CrawlResult into our internal representation."""
 
     # Prepare metadata first to get URLs
@@ -53,10 +63,13 @@ def build_document_from_result(result: CrawlResult) -> CrawledDocument:
         raw_markdown = primary_markdown
     if not primary_markdown.strip():
         primary_markdown = raw_markdown
-    cleaned_markdown = primary_markdown
+    resolved_mode = cast(DedupMode, "off" if dedup_mode == "off" else "exact")
+    cleaned_markdown, dedup_stats = dedup_markdown(primary_markdown, mode=resolved_mode)
 
     # Update metadata with stats
     metadata.update(_prepare_metadata(result, raw_markdown, fit_markdown))
+    metadata.update(dedup_stats)
+    _apply_dedup_guardrails(metadata, final_url=final_url)
     references = parse_references(markdown.references_markdown or "", result.links)
 
     return CrawledDocument(
@@ -157,3 +170,47 @@ def _extract_requested_url(metadata: Dict[str, Any], default: Optional[str]) -> 
         if isinstance(value, str) and value.strip():
             return value.strip()
     return str(default or "")
+
+
+def _apply_dedup_guardrails(metadata: Dict[str, Any], *, final_url: str) -> None:
+    mode = str(metadata.get("dedup_mode") or "")
+
+    if mode != "exact":
+        metadata["dedup_guardrail_checked"] = False
+        metadata["dedup_guardrail_triggered"] = False
+        metadata["dedup_guardrail_reason"] = "dedup-inactive"
+        return
+
+    total = int(metadata.get("dedup_sections_total") or 0)
+    removed = int(metadata.get("dedup_sections_removed") or 0)
+
+    if total <= 0:
+        metadata["dedup_guardrail_checked"] = False
+        metadata["dedup_guardrail_triggered"] = False
+        metadata["dedup_guardrail_reason"] = "no-sections"
+        return
+
+    section_removal_rate = removed / total
+    triggered = (
+        total >= _GUARDRAIL_MIN_SECTIONS
+        and removed >= _GUARDRAIL_MIN_REMOVED
+        and section_removal_rate >= _GUARDRAIL_SECTION_RATE_WARN
+    )
+
+    metadata["dedup_guardrail_checked"] = True
+    metadata["dedup_guardrail_triggered"] = triggered
+    metadata["dedup_guardrail_reason"] = (
+        "high-removal-rate" if triggered else "within-threshold"
+    )
+    metadata["dedup_guardrail_section_removal_rate"] = round(section_removal_rate, 4)
+    metadata["dedup_guardrail_section_rate_threshold"] = _GUARDRAIL_SECTION_RATE_WARN
+
+    if triggered:
+        LOGGER.warning(
+            "Dedup guardrail triggered for %s: removed %d/%d sections (rate=%.3f, threshold=%.2f)",
+            final_url,
+            removed,
+            total,
+            section_removal_rate,
+            _GUARDRAIL_SECTION_RATE_WARN,
+        )

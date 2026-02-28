@@ -6,16 +6,16 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 import tldextract
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig
 from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChain
 from crawl4ai.deep_crawling.filters import DomainFilter
 
-from .auth import AuthConfig, build_browser_config
 from .builder import build_document_from_result
+from .auth import AuthInput, resolve_auth
 from .config import build_markdown_run_config
 from .document import CrawledDocument
 
@@ -66,8 +66,8 @@ async def crawl_site_async(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
-    auth: Optional[AuthConfig] = None,
-    run_config: Optional[CrawlerRunConfig] = None,
+    dedup_mode: str = "exact",
+    auth: Optional[AuthInput] = None,
 ) -> SiteCrawlResult:
     """
     Crawl a website starting from a seed URL using BFS strategy.
@@ -77,9 +77,6 @@ async def crawl_site_async(
         max_depth: Maximum depth to crawl (0 = seed page only).
         max_pages: Maximum number of pages to crawl.
         include_subdomains: Whether to include subdomains in the crawl.
-        auth: Optional AuthConfig for authenticated crawling.
-        run_config: Optional CrawlerRunConfig for custom crawl settings
-            (e.g. SPA delay, wait_until). If None, uses default config.
 
     Returns:
         SiteCrawlResult containing documents, errors, and stats.
@@ -97,10 +94,10 @@ async def crawl_site_async(
             allowed_hosts.add(registrable)
         filters.append(DomainFilter(allowed_domains=sorted(allowed_hosts)))
 
-    filter_chain = FilterChain(filters) if filters else None
+    filter_chain = FilterChain(filters)
 
     # Configure the crawl
-    config = run_config if run_config is not None else build_markdown_run_config()
+    config = build_markdown_run_config()
     config.deep_crawl_strategy = BFSDeepCrawlStrategy(
         max_depth=max_depth,
         max_pages=max_pages,
@@ -115,7 +112,7 @@ async def crawl_site_async(
     # a list of results. Trade-offs:
     #   - Memory: All results held in RAM (acceptable for max_pages limit)
     #   - Latency: Response only after last page (acceptable for MCP request/response)
-    #   - Reliability: Works correctly
+    #   - Reliability: Works correctly ✓
     config.stream = False
     config.exclude_external_links = not include_subdomains
 
@@ -123,14 +120,18 @@ async def crawl_site_async(
     seen_urls: Set[str] = set()
     errors: List[Dict[str, str]] = []
 
-    browser_cfg = build_browser_config(auth)
+    resolved_auth = resolve_auth(auth)
+    browser_cfg = BrowserConfig(
+        use_persistent_context=False,
+        storage_state=resolved_auth.storage_state if resolved_auth else None,
+    )
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         crawl_result = await crawler.arun(url=seed_url, config=config)
 
         async for result in _iterate_results(crawl_result):
             try:
-                document = build_document_from_result(result)
+                document = build_document_from_result(result, dedup_mode=dedup_mode)
             except Exception as exc:
                 LOGGER.warning("Failed to build document for %s: %s", result.url, exc)
                 errors.append(
@@ -185,8 +186,8 @@ def crawl_site(
     max_depth: int = 2,
     max_pages: int = 25,
     include_subdomains: bool = False,
-    auth: Optional[AuthConfig] = None,
-    run_config: Optional[CrawlerRunConfig] = None,
+    dedup_mode: str = "exact",
+    auth: Optional[AuthInput] = None,
 ) -> SiteCrawlResult:
     """Synchronous wrapper for crawl_site_async."""
     return asyncio.run(
@@ -195,8 +196,8 @@ def crawl_site(
             max_depth=max_depth,
             max_pages=max_pages,
             include_subdomains=include_subdomains,
+            dedup_mode=dedup_mode,
             auth=auth,
-            run_config=run_config,
         )
     )
 

@@ -13,6 +13,7 @@ Extracted from the l4l-crawl project - the core crawl4ai configuration that took
 - **Multiple pages** - Batch crawl a list of URLs with concurrency control
 - **Site crawling** - BFS strategy with max depth and page limits
 - **Clean markdown output** - Optimized for documentation sites
+- **Switchable markdown dedup** - `exact` (default) removes repeated blocks, `off` disables dedup
 - **Link removal** - Strip all links from output for cleaner LLM context (`--remove-links`)
 - **Reference extraction** - Captures all links from crawled pages
 
@@ -218,6 +219,7 @@ Crawl one or more web pages and extract their content as markdown.
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `concurrency` | `int` | `3` | Max concurrent crawls |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
+| `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
 
 **Output Formats:**
 - `markdown`: Clean concatenated markdown with URL headers and timestamps
@@ -233,6 +235,9 @@ crawl(urls=["https://example.com/page1", "https://example.com/page2"], output_fo
 
 # Clean output without links
 crawl(urls=["https://example.com"], remove_links=True)
+
+# Disable markdown dedup
+crawl(urls=["https://example.com"], dedup_mode="off")
 ```
 
 #### `crawl_site`
@@ -248,6 +253,7 @@ Crawl an entire website starting from a seed URL using BFS strategy.
 | `include_subdomains` | `bool` | `false` | Include subdomains |
 | `output_format` | `str` | `"markdown"` | Output format: `"markdown"` or `"json"` |
 | `remove_links` | `bool` | `false` | Remove all links from markdown output |
+| `dedup_mode` | `str` | `"exact"` | Markdown dedup mode: `"exact"` or `"off"` |
 
 **Examples:**
 ```
@@ -262,6 +268,9 @@ crawl_site(url="https://docs.example.com", output_format="json")
 
 # Clean output without links
 crawl_site(url="https://docs.example.com", remove_links=True)
+
+# Disable markdown dedup for site crawl
+crawl_site(url="https://docs.example.com", dedup_mode="off")
 ```
 
 #### `search`
@@ -352,7 +361,17 @@ When using `output_format="json"`, the output includes:
       "error_message": null,
       "metadata": {
         "title": "Example",
-        "status_code": 200
+        "status_code": 200,
+        "dedup_mode": "exact",
+        "dedup_sections_total": 12,
+        "dedup_sections_removed": 3,
+        "dedup_chars_removed": 542,
+        "dedup_applied": true,
+        "dedup_guardrail_checked": true,
+        "dedup_guardrail_triggered": false,
+        "dedup_guardrail_reason": "within-threshold",
+        "dedup_guardrail_section_removal_rate": 0.25,
+        "dedup_guardrail_section_rate_threshold": 0.6
       },
       "references": [
         {"index": 1, "href": "https://example.com/about", "label": "About"}
@@ -380,13 +399,13 @@ When using `output_format="json"`, the output includes:
 from crawler import crawl_page, crawl_page_async
 
 # Sync
-doc = crawl_page("https://docs.example.com/intro")
+doc = crawl_page("https://docs.example.com/intro", dedup_mode="exact")
 print(doc.markdown)
 print(doc.final_url)
 print(doc.references)  # List of Reference(index, href, label)
 
 # Async
-doc = await crawl_page_async("https://docs.example.com/intro")
+doc = await crawl_page_async("https://docs.example.com/intro", dedup_mode="off")
 ```
 
 ### Multiple Pages
@@ -401,7 +420,7 @@ urls = [
 ]
 
 # Sync (with concurrency limit)
-docs = crawl_pages(urls, concurrency=3)
+docs = crawl_pages(urls, concurrency=3, dedup_mode="exact")
 
 for doc in docs:
     if doc.status == "success":
@@ -411,7 +430,7 @@ for doc in docs:
         print(f"FAILED: {doc.request_url} - {doc.error_message}")
 
 # Async
-docs = await crawl_pages_async(urls, concurrency=5)
+docs = await crawl_pages_async(urls, concurrency=5, dedup_mode="off")
 ```
 
 ### Site Crawl (BFS)
@@ -425,6 +444,7 @@ result = crawl_site(
     max_depth=2,           # How deep to follow links
     max_pages=10,          # Stop after N pages
     include_subdomains=False,
+    dedup_mode="exact",   # "exact" (default) or "off"
 )
 
 print(f"Crawled {result.stats['total_pages']} pages")
@@ -460,12 +480,25 @@ crawl https://example.com --json
 # Clean output without links (better for LLM context)
 crawl https://example.com --remove-links
 
+# Disable markdown dedup
+crawl https://example.com --dedup-mode off
+
 # JSON output for site crawl
 crawl https://docs.example.com --site --max-pages 5 --json -o result.json
 
 # Verbose logging
 crawl https://example.com -v
 ```
+
+### Dedup Mode (`crawl`)
+
+- `--dedup-mode exact` (default): removes exact repeated markdown blocks in a single document.
+- `--dedup-mode off`: disables markdown dedup and keeps extracted blocks unchanged.
+
+Dedup metrics are written into each document's `metadata` (e.g. `dedup_sections_removed`, `dedup_chars_removed`).
+Guardrails are non-destructive and annotate metadata via fields like
+`dedup_guardrail_checked`, `dedup_guardrail_triggered`, and `dedup_guardrail_reason`
+when removal ratios are unusually high.
 
 ### search
 
@@ -503,7 +536,7 @@ class CrawledDocument:
     html: Optional[str]       # Raw HTML (if available)
     headers: Dict[str, Any]   # HTTP response headers
     references: List[Reference]  # Extracted links
-    metadata: Dict[str, Any]  # Title, status code, etc.
+    metadata: Dict[str, Any]  # Title, status code, dedup metrics, guardrail info
     raw_markdown: Optional[str]  # Unprocessed markdown
     error_message: Optional[str]  # Error details if failed
 

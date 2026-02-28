@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Switchable markdown dedup mode across crawl surfaces:
+  - CLI: `crawl --dedup-mode {exact,off}` (default: `exact`)
+  - MCP tools: `crawl(..., dedup_mode=...)` and `crawl_site(..., dedup_mode=...)`
+  - Python API: `crawl_page(_async)`, `crawl_pages(_async)`, and `crawl_site(_async)` accept `dedup_mode`
+- New exact intra-document markdown dedup core with per-document dedup metrics in metadata:
+  - `dedup_mode`, `dedup_sections_total`, `dedup_sections_removed`, `dedup_chars_removed`, `dedup_applied`
+- Non-destructive dedup guardrail metadata and warning signal fields:
+  - `dedup_guardrail_checked`, `dedup_guardrail_triggered`, `dedup_guardrail_reason`
+  - `dedup_guardrail_section_removal_rate`, `dedup_guardrail_section_rate_threshold`
+- Integration and regression test coverage for dedup behavior and parameter propagation across builder/API/CLI/MCP paths.
+
+### Fixed
+- Resolved real-world duplicate markdown blocks on `https://docs.agno.com/introduction` by improving exact dedup section segmentation around heading boundaries.
+
+### Changed
+- Updated README documentation for dedup controls, defaults, metadata fields, and usage examples.
+- Kept crawler extraction selectors/configuration unchanged while introducing dedup controls (no selector/config drift).
+
 ## [0.1.1] - 2026-01-26
 
 ### Fixed

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Regression test coverage for MCP stdio safety defaults in `tests/test_config.py`.
+
+### Fixed
+- Prevented MCP stdio protocol corruption from noisy crawl runtime init output by disabling verbose crawl defaults in run-config builders.
+- Hardened MCP server startup for Windows Unicode output by forcing UTF-8 stdio encoding (avoids `charmap` encode failures for characters like `→`).
+
 ## [0.2.1] - 2026-02-28
 
 ### Added

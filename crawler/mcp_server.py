@@ -39,6 +39,21 @@ from fastmcp import FastMCP
 
 from .document import CrawledDocument
 
+
+def _configure_stdio_encoding() -> None:
+    """Force UTF-8 stdio to avoid Windows charmap encoding failures."""
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        # Best-effort only; do not fail MCP startup on encoding tuning.
+        pass
+
+
+_configure_stdio_encoding()
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

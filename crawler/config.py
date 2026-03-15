@@ -160,7 +160,7 @@ def build_markdown_run_config(
     """RunConfig for single-page crawls, optimized for main content extraction."""
     generator = build_markdown_generator()
     config = CrawlerRunConfig(
-        verbose=True,
+        verbose=False,
         semaphore_count=1,
         delay_before_return_html=0.5,
         mean_delay=0.5,
@@ -188,7 +188,7 @@ def build_discovery_run_config(
     """Configuration focused on link discovery for site crawling."""
     generator = build_markdown_generator()
     config = CrawlerRunConfig(
-        verbose=True,
+        verbose=False,
         semaphore_count=1,
         wait_until="networkidle",
         delay_before_return_html=2.0,

@@ -1,6 +1,15 @@
 name: searxncrawl
 
 services:
+  searxng:
+    image: searxng/searxng:latest
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-replace-with-unique-searxng-secret}
+    volumes:
+      - ${SEARXNG_CONFIG_DIR:-./searxng-config}:/etc/searxng
+    ports:
+      - "${SEARXNG_PORT:-8888}:8080"
+
   searxncrawl:
     build:
       context: .
@@ -16,8 +25,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    depends_on:
+      - searxng
     environment:
-      SEARXNG_URL: ${SEARXNG_URL:-http://localhost:8888}
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
     ports:
       - "${MCP_PORT:-9555}:${MCP_PORT:-9555}"
     command:

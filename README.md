@@ -204,7 +204,36 @@ Create a `.env` file (see `.env.example`) and run:
 docker compose up --build
 ```
 
+Compose starts two services by default:
+
+- `searxng` (metasearch engine)
+- `searxncrawl` (MCP server)
+
 The MCP HTTP port is configurable via `MCP_PORT` in `.env`. Default is `9555`, so the server is available at `http://localhost:9555/mcp`.
+
+SearXNG is configurable directly from compose/env:
+
+- `SEARXNG_PORT` controls host port mapping for SearXNG (default `8888`)
+- `SEARXNG_SECRET` sets the SearXNG server secret
+- `SEARXNG_CONFIG_DIR` controls where SearXNG config is mounted (default `./searxng-config`)
+
+After first boot, edit `${SEARXNG_CONFIG_DIR}/settings.yml` to tune engines/formats. For example, to avoid noisy startup failures from optional engines and ensure JSON API output:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+
+# Remove or keep disabled engines that fail in your environment
+# (example: ahmia / torch)
+```
+
+Then restart:
+
+```bash
+docker compose restart searxng
+```
 
 To run real‑world checks against the Docker setup (crawl, crawl_site, search), use:
 

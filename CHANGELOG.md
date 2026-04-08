@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-04-08
+
+### Added
+- Configurable timeout parameters for MCP tools:
+  - `crawl(..., timeout: int = 30)` — per-page timeout in seconds
+  - `crawl_site(..., timeout: int = 120)` — overall site timeout in seconds
+  - Validation: `timeout >= 1` with `ValueError("timeout must be >= 1")`
+- Elapsed-time logging for all crawl paths:
+  - Per-URL completion and timeout logs in `crawl_page_async()` and `crawl_pages_async()`
+  - Batch total elapsed log after `crawl_pages_async()` completes
+  - Site crawl completion and timeout logs in `crawl_site_async()`
+  - Search success/failure elapsed logs in MCP `search()` tool
+- Search retry with exponential backoff for `httpx.RequestError`:
+  - Default 3 attempts (2 retries) with configurable `max_retries`
+  - `httpx.HTTPStatusError` remains non-retry (fails immediately)
+- Unit tests for timeout handling and search retry (`tests/test_timeout.py`):
+  - Single-page timeout test (`crawl_page_async`)
+  - Batch timeout isolation test (`crawl_pages_async`)
+  - Site timeout graceful result test (`crawl_site_async`)
+  - MCP structured timeout output test (`crawl_site`)
+  - Search retry and non-retry path tests (`search`)
+
+### Changed
+- Switched site crawling from BFS to DFS strategy:
+  - Eliminates non-deterministic empty pages caused by Crawl4AI's concurrent
+    `arun_many()` racing against `wait_for` predicate timeouts
+  - DFS processes URLs one at a time (like stable single-page path)
+  - Preserves `js_code` reload for lazy-load and bot-protected sites
+  - Before: 5/10 pages empty on docs.agno.com (BFS)
+  - After: 10/10 pages successful (DFS)
+- Added `page_timeout=30000` to Crawl4AI run config (was 60000ms default)
+  for faster failure detection on stuck pages
+- Changed discovery config `wait_until` from `networkidle` to `domcontentloaded`
+  for faster initial page readiness
+
+### Fixed
+- Graceful timeout handling in `crawl_site_async()` — returns structured
+  `SiteCrawlResult` with error entry instead of raising `TimeoutError`
+- Defensive MCP timeout catch in `crawl_site` tool — returns structured
+  failed output via `_format_output()` for consistent JSON/markdown contracts
+- Per-URL timeout isolation in `crawl_pages_async()` — timeout on one URL
+  produces failed `CrawledDocument` without affecting other URLs in batch
+
 ## [0.2.1] - 2026-02-28
 
 ### Added

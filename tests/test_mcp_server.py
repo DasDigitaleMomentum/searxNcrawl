@@ -25,13 +25,15 @@ def _doc(metadata: dict | None = None) -> SimpleNamespace:
 async def test_mcp_crawl_forwards_dedup_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
-    async def fake_crawl_page_async(url: str, *, dedup_mode: str = "exact", auth=None):
+    async def fake_crawl_page_async(
+        url: str, *, dedup_mode: str = "exact", auth=None, timeout=None
+    ):
         captured["mode"] = dedup_mode
         captured["auth"] = auth
         return _doc()
 
     async def fake_crawl_pages_async(
-        urls, *, concurrency=3, dedup_mode="exact", auth=None
+        urls, *, concurrency=3, dedup_mode="exact", auth=None, timeout=None
     ):
         return [_doc() for _ in urls]
 
@@ -89,11 +91,13 @@ async def test_mcp_json_output_includes_builder_guardrail_metadata(
         "dedup_guardrail_reason": "high-removal-rate",
     }
 
-    async def fake_crawl_page_async(url: str, *, dedup_mode: str = "exact", auth=None):
+    async def fake_crawl_page_async(
+        url: str, *, dedup_mode: str = "exact", auth=None, timeout=None
+    ):
         return _doc(metadata=metadata)
 
     async def fake_crawl_pages_async(
-        urls, *, concurrency=3, dedup_mode="exact", auth=None
+        urls, *, concurrency=3, dedup_mode="exact", auth=None, timeout=None
     ):
         return [_doc(metadata=metadata) for _ in urls]
 
@@ -114,11 +118,13 @@ async def test_mcp_json_output_includes_builder_guardrail_metadata(
 async def test_mcp_crawl_auth_error_propagates_from_resolver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_crawl_page_async(url: str, *, dedup_mode: str = "exact", auth=None):
+    async def fake_crawl_page_async(
+        url: str, *, dedup_mode: str = "exact", auth=None, timeout=None
+    ):
         raise ValueError("Auth storage_state file not found: /tmp/missing.json")
 
     async def fake_crawl_pages_async(
-        urls, *, concurrency=3, dedup_mode="exact", auth=None
+        urls, *, concurrency=3, dedup_mode="exact", auth=None, timeout=None
     ):
         return [_doc() for _ in urls]
 

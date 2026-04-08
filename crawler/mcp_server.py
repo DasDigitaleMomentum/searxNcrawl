@@ -25,10 +25,12 @@ Environment Variables:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -190,6 +192,7 @@ async def crawl(
     urls: List[str],
     output_format: str = "markdown",
     concurrency: int = 3,
+    timeout: int = 30,
     remove_links: bool = False,
     dedup_mode: str = "exact",
     storage_state: Optional[str] = None,
@@ -203,6 +206,7 @@ async def crawl(
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and statistics
         concurrency: Maximum concurrent crawls (default: 3)
+        timeout: Per-URL timeout in seconds (default: 30, must be >= 1)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
         storage_state: Path to Playwright storage_state JSON for authenticated crawling
@@ -225,6 +229,9 @@ async def crawl(
     """
     from . import crawl_page_async, crawl_pages_async
 
+    if timeout < 1:
+        raise ValueError("timeout must be >= 1")
+
     # Validate output format
     try:
         fmt = OutputFormat(output_format.lower())
@@ -236,7 +243,9 @@ async def crawl(
 
     if len(urls) == 1:
         try:
-            doc = await crawl_page_async(urls[0], dedup_mode=dedup_mode, auth=auth)
+            doc = await crawl_page_async(
+                urls[0], dedup_mode=dedup_mode, auth=auth, timeout=timeout
+            )
             docs = [doc]
         except Exception as exc:
             docs = [
@@ -254,6 +263,7 @@ async def crawl(
             concurrency=concurrency,
             dedup_mode=dedup_mode,
             auth=auth,
+            timeout=timeout,
         )
 
     successful = sum(1 for d in docs if d.status == "success")
@@ -269,6 +279,7 @@ async def crawl_site(
     max_pages: int = 25,
     include_subdomains: bool = False,
     output_format: str = "markdown",
+    timeout: int = 120,
     remove_links: bool = False,
     dedup_mode: str = "exact",
     storage_state: Optional[str] = None,
@@ -284,6 +295,7 @@ async def crawl_site(
         output_format: Output format - "markdown" (default) or "json"
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and crawl statistics
+        timeout: Overall site crawl timeout in seconds (default: 120, must be >= 1)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
         storage_state: Path to Playwright storage_state JSON for authenticated crawling
@@ -309,6 +321,9 @@ async def crawl_site(
     """
     from . import crawl_site_async
 
+    if timeout < 1:
+        raise ValueError("timeout must be >= 1")
+
     # Validate output format
     try:
         fmt = OutputFormat(output_format.lower())
@@ -322,14 +337,33 @@ async def crawl_site(
         max_pages,
     )
 
-    result = await crawl_site_async(
-        url,
-        max_depth=max_depth,
-        max_pages=max_pages,
-        include_subdomains=include_subdomains,
-        dedup_mode=dedup_mode,
-        auth={"storage_state": storage_state} if storage_state else None,
-    )
+    try:
+        result = await crawl_site_async(
+            url,
+            max_depth=max_depth,
+            max_pages=max_pages,
+            include_subdomains=include_subdomains,
+            dedup_mode=dedup_mode,
+            auth={"storage_state": storage_state} if storage_state else None,
+            timeout=timeout,
+        )
+    except TimeoutError:
+        timeout_doc = CrawledDocument(
+            request_url=url,
+            final_url=url,
+            status="failed",
+            markdown="",
+            error_message="Site crawl timed out",
+        )
+        timeout_stats = {
+            "total_pages": 1,
+            "successful_pages": 0,
+            "failed_pages": 1,
+            "error_count": 1,
+        }
+        return _format_output(
+            [timeout_doc], fmt, stats=timeout_stats, remove_links=remove_links
+        )
 
     LOGGER.info(
         "Site crawl complete: %d pages (%d successful, %d failed)",
@@ -375,6 +409,7 @@ async def search(
     safesearch: int = 1,
     pageno: int = 1,
     max_results: int = 10,
+    max_retries: int = 3,
 ):
     """
     Search the web using SearXNG metasearch engine.
@@ -388,6 +423,7 @@ async def search(
         safesearch: Safe search level - 0 (off), 1 (moderate), 2 (strict). Default: 1
         pageno: Page number for results (minimum 1). Default: 1
         max_results: Maximum results to return (1-50). Default: 10
+        max_retries: Maximum attempts for transient RequestError failures (default: 3)
 
     Returns:
         JSON string with search results including:
@@ -412,6 +448,7 @@ async def search(
         search(query="Rezepte", language="de")
     """
     LOGGER.info("Searching SearXNG for: %s", query)
+    start = time.monotonic()
 
     # Build search parameters
     params: Dict[str, Any] = {
@@ -431,11 +468,49 @@ async def search(
     if engines:
         params["engines"] = ",".join(engines)
 
+    attempts = max(1, max_retries)
+    base_backoff = 0.5
+
     try:
-        async with _get_searxng_client() as client:
-            response = await client.get("/search", params=params)
-            response.raise_for_status()
-            data = response.json()
+        data = None
+        for attempt in range(1, attempts + 1):
+            try:
+                async with _get_searxng_client() as client:
+                    response = await client.get("/search", params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                break
+            except httpx.RequestError as exc:
+                if attempt < attempts:
+                    backoff = base_backoff * (2 ** (attempt - 1))
+                    LOGGER.warning(
+                        "Search request error on attempt %d/%d for '%s': %s; retrying in %.1fs",
+                        attempt,
+                        attempts,
+                        query,
+                        exc,
+                        backoff,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+
+                elapsed = time.monotonic() - start
+                error_msg = f"Request failed: {str(exc)}"
+                LOGGER.error(
+                    "Search failed after %d attempt(s) in %.1fs: %s",
+                    attempt,
+                    elapsed,
+                    error_msg,
+                )
+                return json.dumps(
+                    {"error": error_msg, "query": query}, ensure_ascii=False
+                )
+
+        if data is None:
+            elapsed = time.monotonic() - start
+            error_msg = "Request failed: no response data"
+            LOGGER.error("Search failed in %.1fs: %s", elapsed, error_msg)
+            return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
         # Limit results
         max_results = min(max(1, max_results), 50)
@@ -443,11 +518,17 @@ async def search(
             data["results"] = data["results"][:max_results]
             data["number_of_results"] = len(data["results"])
 
-        LOGGER.info("Search returned %d results", data.get("number_of_results", 0))
+        elapsed = time.monotonic() - start
+        LOGGER.info(
+            "Search returned %d results in %.1fs",
+            data.get("number_of_results", 0),
+            elapsed,
+        )
 
         return json.dumps(data, indent=2, ensure_ascii=False)
 
     except httpx.HTTPStatusError as exc:
+        elapsed = time.monotonic() - start
         if exc.response.status_code == 401:
             error_msg = (
                 "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
@@ -456,17 +537,13 @@ async def search(
             error_msg = (
                 f"SearXNG API error: {exc.response.status_code} - {exc.response.text}"
             )
-        LOGGER.error(error_msg)
-        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
-
-    except httpx.RequestError as exc:
-        error_msg = f"Request failed: {str(exc)}"
-        LOGGER.error(error_msg)
+        LOGGER.error("Search failed in %.1fs: %s", elapsed, error_msg)
         return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
     except Exception as exc:
+        elapsed = time.monotonic() - start
         error_msg = f"Unexpected error: {str(exc)}"
-        LOGGER.error(error_msg)
+        LOGGER.error("Search failed in %.1fs: %s", elapsed, error_msg)
         return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
 
 

@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
+import time
 from typing import Any, List, Optional, cast
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
@@ -74,6 +76,9 @@ __all__ = [
     "mcp",
 ]
 
+DEFAULT_PAGE_TIMEOUT = 30
+LOGGER = logging.getLogger(__name__)
+
 
 def get_mcp_server():
     """Get the MCP server instance (lazy import to avoid dependency if not needed)."""
@@ -97,6 +102,7 @@ async def crawl_page_async(
     config: Optional[CrawlerRunConfig] = None,
     dedup_mode: str = "exact",
     auth: Optional[AuthInput] = None,
+    timeout: float | None = None,
 ) -> CrawledDocument:
     """
     Crawl a single page and return the extracted markdown.
@@ -104,6 +110,7 @@ async def crawl_page_async(
     Args:
         url: The URL to crawl.
         config: Optional CrawlerRunConfig for advanced customization.
+        timeout: Per-URL timeout in seconds. Uses default when None.
 
     Returns:
         CrawledDocument with markdown content, references, and metadata.
@@ -111,7 +118,9 @@ async def crawl_page_async(
     Raises:
         ValueError: If the crawler returns no results.
     """
+    start = time.monotonic()
     run_config = config or build_markdown_run_config()
+    effective_timeout = timeout if timeout is not None else DEFAULT_PAGE_TIMEOUT
     resolved_auth = resolve_auth(auth)
     browser_cfg = (
         BrowserConfig(storage_state=resolved_auth.storage_state)
@@ -119,19 +128,33 @@ async def crawl_page_async(
         else None
     )
 
-    if browser_cfg is None:
-        async with AsyncWebCrawler() as crawler:
-            container = await crawler.arun(url=url, config=run_config)
-    else:
-        async with AsyncWebCrawler(config=browser_cfg) as crawler:
-            container = await crawler.arun(url=url, config=run_config)
+    try:
+        if browser_cfg is None:
+            async with AsyncWebCrawler() as crawler:
+                container = await asyncio.wait_for(
+                    crawler.arun(url=url, config=run_config),
+                    timeout=effective_timeout,
+                )
+        else:
+            async with AsyncWebCrawler(config=browser_cfg) as crawler:
+                container = await asyncio.wait_for(
+                    crawler.arun(url=url, config=run_config),
+                    timeout=effective_timeout,
+                )
+    except TimeoutError:
+        elapsed = time.monotonic() - start
+        LOGGER.warning("Timeout crawling %s after %.1fs", url, elapsed)
+        raise
 
     first_result = await _extract_first_result(container)
 
     if first_result is None:
         raise ValueError(f"Crawler returned no results for {url}")
 
-    return build_document_from_result(first_result, dedup_mode=dedup_mode)
+    doc = build_document_from_result(first_result, dedup_mode=dedup_mode)
+    elapsed = time.monotonic() - start
+    LOGGER.info("Crawled %s in %.1fs", url, elapsed)
+    return doc
 
 
 async def _extract_first_result(container: Any) -> Optional[CrawlResult]:
@@ -187,6 +210,7 @@ async def crawl_pages_async(
     concurrency: int = 3,
     dedup_mode: str = "exact",
     auth: Optional[AuthInput] = None,
+    timeout: float | None = None,
 ) -> List[CrawledDocument]:
     """
     Crawl multiple pages and return their extracted markdown.
@@ -195,23 +219,41 @@ async def crawl_pages_async(
         urls: List of URLs to crawl.
         config: Optional CrawlerRunConfig for advanced customization.
         concurrency: Maximum number of concurrent crawls.
+        timeout: Per-URL timeout in seconds. Uses default when None.
 
     Returns:
         List of CrawledDocument objects (in same order as input URLs).
         Failed crawls will have status="failed" and error_message set.
     """
+    batch_start = time.monotonic()
     run_config = config or build_markdown_run_config()
+    effective_timeout = timeout if timeout is not None else DEFAULT_PAGE_TIMEOUT
     resolved_auth = resolve_auth(auth)
     semaphore = asyncio.Semaphore(concurrency)
 
     async def crawl_one(url: str) -> CrawledDocument:
         async with semaphore:
+            start = time.monotonic()
             try:
-                return await crawl_page_async(
+                doc = await crawl_page_async(
                     url,
                     config=run_config,
                     dedup_mode=dedup_mode,
                     auth=resolved_auth,
+                    timeout=timeout,
+                )
+                elapsed = time.monotonic() - start
+                LOGGER.info("Crawled %s in %.1fs", url, elapsed)
+                return doc
+            except TimeoutError:
+                elapsed = time.monotonic() - start
+                LOGGER.warning("Timeout crawling %s after %.1fs", url, elapsed)
+                return CrawledDocument(
+                    request_url=url,
+                    final_url=url,
+                    status="failed",
+                    markdown="",
+                    error_message=f"Timeout after {effective_timeout}s",
                 )
             except Exception as exc:
                 # Return a failed document instead of raising
@@ -224,7 +266,10 @@ async def crawl_pages_async(
                 )
 
     tasks = [crawl_one(url) for url in urls]
-    return await asyncio.gather(*tasks)
+    docs = await asyncio.gather(*tasks)
+    batch_elapsed = time.monotonic() - batch_start
+    LOGGER.info("Crawled %d URL(s) in %.1fs", len(urls), batch_elapsed)
+    return docs
 
 
 def crawl_pages(
@@ -255,6 +300,7 @@ async def crawl_site_async(
     include_subdomains: bool = False,
     dedup_mode: str = "exact",
     auth: Optional[AuthInput] = None,
+    timeout: float | None = None,
 ) -> SiteCrawlResult:
     """Async wrapper that forwards dedup mode to site crawl."""
     return await _crawl_site_async(
@@ -264,6 +310,7 @@ async def crawl_site_async(
         include_subdomains=include_subdomains,
         dedup_mode=dedup_mode,
         auth=auth,
+        timeout=timeout,
     )
 
 

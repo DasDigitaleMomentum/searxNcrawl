@@ -47,6 +47,7 @@ async def test_crawl_pages_async_defaults_to_exact(
         config=None,
         dedup_mode="exact",
         auth=None,
+        timeout=None,
     ):
         captured.append(dedup_mode)
         return SimpleNamespace(status="success", request_url=url)
@@ -86,7 +87,9 @@ async def test_crawl_pages_async_forwards_auth_to_crawl_page(
     storage_state = tmp_path / "state.json"
     storage_state.write_text("{}", encoding="utf-8")
 
-    async def fake_crawl_page_async(url, *, config=None, dedup_mode="exact", auth=None):
+    async def fake_crawl_page_async(
+        url, *, config=None, dedup_mode="exact", auth=None, timeout=None
+    ):
         captured.append(auth)
         return SimpleNamespace(status="success", request_url=url)
 

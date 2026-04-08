@@ -162,6 +162,7 @@ def build_markdown_run_config(
     config = CrawlerRunConfig(
         verbose=True,
         semaphore_count=1,
+        page_timeout=30000,
         delay_before_return_html=0.5,
         mean_delay=0.5,
         max_range=0.3,
@@ -190,7 +191,8 @@ def build_discovery_run_config(
     config = CrawlerRunConfig(
         verbose=True,
         semaphore_count=1,
-        wait_until="networkidle",
+        wait_until="domcontentloaded",
+        page_timeout=30000,
         delay_before_return_html=2.0,
         mean_delay=2.0,
         max_range=0.3,

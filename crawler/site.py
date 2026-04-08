@@ -1,9 +1,10 @@
-"""Site crawler for multi-page BFS crawling."""
+"""Site crawler for multi-page DFS crawling."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -11,7 +12,8 @@ from urllib.parse import urlparse
 
 import tldextract
 from crawl4ai import AsyncWebCrawler, BrowserConfig
-from crawl4ai.deep_crawling.bfs_strategy import BFSDeepCrawlStrategy, FilterChain
+from crawl4ai.deep_crawling.bfs_strategy import FilterChain
+from crawl4ai.deep_crawling.dfs_strategy import DFSDeepCrawlStrategy
 from crawl4ai.deep_crawling.filters import DomainFilter
 
 from .builder import build_document_from_result
@@ -20,6 +22,8 @@ from .config import build_markdown_run_config
 from .document import CrawledDocument
 
 LOGGER = logging.getLogger(__name__)
+
+DEFAULT_SITE_TIMEOUT = 120
 
 
 @dataclass
@@ -68,20 +72,23 @@ async def crawl_site_async(
     include_subdomains: bool = False,
     dedup_mode: str = "exact",
     auth: Optional[AuthInput] = None,
+    timeout: float | None = None,
 ) -> SiteCrawlResult:
     """
-    Crawl a website starting from a seed URL using BFS strategy.
+    Crawl a website starting from a seed URL using DFS strategy.
 
     Args:
         url: The seed URL to start crawling from.
         max_depth: Maximum depth to crawl (0 = seed page only).
         max_pages: Maximum number of pages to crawl.
         include_subdomains: Whether to include subdomains in the crawl.
+        timeout: Overall crawl timeout in seconds. Uses default when None.
 
     Returns:
         SiteCrawlResult containing documents, errors, and stats.
     """
     seed_url = str(url)
+    start = time.monotonic()
     parsed = urlparse(seed_url)
     seed_host = _normalize_host(parsed.netloc or parsed.hostname)
     registrable = _registrable_domain(seed_host) if seed_host else None
@@ -98,7 +105,7 @@ async def crawl_site_async(
 
     # Configure the crawl
     config = build_markdown_run_config()
-    config.deep_crawl_strategy = BFSDeepCrawlStrategy(
+    config.deep_crawl_strategy = DFSDeepCrawlStrategy(
         max_depth=max_depth,
         max_pages=max_pages,
         filter_chain=filter_chain,
@@ -121,13 +128,37 @@ async def crawl_site_async(
     errors: List[Dict[str, str]] = []
 
     resolved_auth = resolve_auth(auth)
+    effective_timeout = timeout if timeout is not None else DEFAULT_SITE_TIMEOUT
     browser_cfg = BrowserConfig(
         use_persistent_context=False,
         storage_state=resolved_auth.storage_state if resolved_auth else None,
     )
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        crawl_result = await crawler.arun(url=seed_url, config=config)
+        try:
+            crawl_result = await asyncio.wait_for(
+                crawler.arun(url=seed_url, config=config),
+                timeout=effective_timeout,
+            )
+        except TimeoutError:
+            elapsed = time.monotonic() - start
+            LOGGER.warning("Timeout crawling %s after %.1fs", seed_url, elapsed)
+            return SiteCrawlResult(
+                documents=[],
+                errors=[
+                    {
+                        "url": seed_url,
+                        "error": f"Timeout after {effective_timeout}s",
+                        "stage": "crawl_timeout",
+                    }
+                ],
+                stats={
+                    "total_pages": 0,
+                    "successful_pages": 0,
+                    "failed_pages": 0,
+                    "error_count": 1,
+                },
+            )
 
         async for result in _iterate_results(crawl_result):
             try:
@@ -177,6 +208,8 @@ async def crawl_site_async(
         "error_count": len(errors),
     }
 
+    elapsed = time.monotonic() - start
+    LOGGER.info("Crawled %s in %.1fs", seed_url, elapsed)
     return SiteCrawlResult(documents=documents, errors=errors, stats=stats)
 
 

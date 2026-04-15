@@ -23,11 +23,12 @@ version: 1.0
 
 | Dependency | Type | Purpose |
 |-----------|------|---------|
+| `crawler-env` | module | Shared `.env` loading with config-dir fallback (`crawler/env.py`). |
 | `crawler-package-api` | module | Calls async crawl and site-crawl APIs from tool handlers (`crawler/mcp_server.py:221`, `crawler/mcp_server.py:295`). |
 | `crawler-document-pipeline` | module | Uses `CrawledDocument` type and serialization support (`crawler/mcp_server.py:40`). |
 | `fastmcp.FastMCP` | library | MCP framework for declaring tools and running server (`crawler/mcp_server.py:38`, `crawler/mcp_server.py:59`). |
 | `httpx` | library | SearXNG HTTP client for search tool (`crawler/mcp_server.py:36`, `crawler/mcp_server.py:332`). |
-| `python-dotenv` | library | Loads environment before server/tool config resolution (`crawler/mcp_server.py:37`, `crawler/mcp_server.py:51`). |
+| `python-dotenv` | library | Transitively used via shared `crawler.env` config loader (`crawler/env.py`). |
 
 ## Structure
 
@@ -63,7 +64,11 @@ version: 1.0
 
 ## Configuration
 
-- Environment variables loaded at startup:
+- Environment variables loaded at startup via shared `crawler.env.load_config()` which searches:
+  1. `./.env` (current working directory)
+  2. `~/.config/searxncrawl/.env` (user config directory)
+  3. Auto-creates from `.env.example` if available
+- Env vars consumed:
   - `SEARXNG_URL` (`crawler/mcp_server.py:54`)
   - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/mcp_server.py:55`-`crawler/mcp_server.py:56`)
 - Runtime CLI args for server process:

@@ -26,7 +26,7 @@ The system is implemented as one package (`crawler/`) with clear layers:
 User / Agent
   |                          |
   v                          v
-CLI (crawl/search)      MCP client (stdio/http)
+CLI (crawl/capture/search)  MCP client (stdio/http)
   |                          |
   +------------+-------------+
                v
@@ -62,6 +62,7 @@ CLI (crawl/search)      MCP client (stdio/http)
 | Module | Description | Documentation |
 |--------|-------------|---------------|
 | crawler-package-api | Public Python crawl APIs and lazy MCP export. | [Detail](modules/crawler-package-api.md) |
+| crawler-env | Shared `.env` config loading with CWD → user-config fallback. | [Detail](modules/crawler-env.md) |
 | crawler-config | Crawl4AI and markdown generation configuration builders. | [Detail](modules/crawler-config.md) |
 | crawler-document-pipeline | Internal document datatypes, reference extraction, and result conversion. | [Detail](modules/crawler-document-pipeline.md) |
 | crawler-site-crawl | BFS site crawling with domain/subdomain controls. | [Detail](modules/crawler-site-crawl.md) |
@@ -76,7 +77,7 @@ CLI (crawl/search)      MCP client (stdio/http)
 | site-crawling-bfs | Crawl complete sites from a seed URL via BFS strategy. | [Detail](features/site-crawling-bfs.md) |
 | search-with-searxng | Query SearXNG with filters and structured output. | [Detail](features/search-with-searxng.md) |
 | mcp-tools-and-transports | Expose crawl/search tools over MCP stdio or HTTP. | [Detail](features/mcp-tools-and-transports.md) |
-| cli-commands-and-output | CLI argument parsing, env loading, and output materialization. | [Detail](features/cli-commands-and-output.md) |
+| cli-commands-and-output | CLI argument parsing, env loading, and output materialization across markdown, JSON, link-stripped, and links-only modes. | [Detail](features/cli-commands-and-output.md) |
 
 ## Development
 
@@ -90,15 +91,16 @@ CLI (crawl/search)      MCP client (stdio/http)
 
 - Entry points:
   - `crawl` → `crawler.cli:main` (`pyproject.toml:23`)
-  - `search` → `crawler.cli:search_main` (`pyproject.toml:24`)
-  - `crawl-mcp` → `crawler.mcp_server:main` (`pyproject.toml:25`)
+  - `crawl-capture` → `crawler.cli:capture_main` (`pyproject.toml:24`)
+  - `search` → `crawler.cli:search_main` (`pyproject.toml:25`)
+  - `crawl-mcp` → `crawler.mcp_server:main` (`pyproject.toml:26`)
 - MCP server run patterns documented in `README.md:51`-`README.md:66`.
 - Container runtime in `Dockerfile` and `docker-compose.yml`.
 
 ### Testing
 
 - Pytest configured via `pyproject.toml:39`-`pyproject.toml:41`.
-- In this branch snapshot, `tests/` currently contains only `__pycache__/` entries.
+- CLI coverage includes `tests/test_cli.py`, with links-only output mode scenarios and argument parsing checks.
 - Operational test scripts exist in `scripts/test-realworld.sh` and `scripts/test-extended.sh`.
 
 ## References

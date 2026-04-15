@@ -8,59 +8,15 @@ import json
 import logging
 import os
 import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from dotenv import load_dotenv
 
-# Configuration directory for global CLI usage
-CONFIG_DIR = Path.home() / ".config" / "searxncrawl"
-CONFIG_ENV_FILE = CONFIG_DIR / ".env"
+from .env import load_config
 
-
-def _load_config() -> None:
-    """Load .env configuration with fallback to user config directory.
-
-    Search order:
-    1. .env in current working directory
-    2. ~/.config/searxncrawl/.env
-
-    If neither exists and .env.example is found in the package directory,
-    it will be copied to ~/.config/searxncrawl/.env as a starting point.
-    """
-    # First, try current directory
-    local_env = Path.cwd() / ".env"
-    if local_env.is_file():
-        load_dotenv(local_env)
-        return
-
-    # Second, try user config directory
-    if CONFIG_ENV_FILE.is_file():
-        load_dotenv(CONFIG_ENV_FILE)
-        return
-
-    # No .env found - try to create config from .env.example
-    package_dir = Path(__file__).parent.parent
-    example_file = package_dir / ".env.example"
-
-    if example_file.is_file():
-        try:
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            shutil.copy(example_file, CONFIG_ENV_FILE)
-            logging.info(
-                "Created config file at %s from .env.example. "
-                "Please edit it with your SEARXNG_URL.",
-                CONFIG_ENV_FILE,
-            )
-            load_dotenv(CONFIG_ENV_FILE)
-        except OSError:
-            pass  # Silently continue without config
-
-
-_load_config()
+load_config()
 
 from .document import CrawledDocument
 from .session_capture import (
@@ -151,6 +107,24 @@ def _doc_to_dict(doc: CrawledDocument) -> dict:
     }
 
 
+def _references_to_list(doc: CrawledDocument) -> List[Dict[str, Any]]:
+    """Convert document references to a JSON-serializable list."""
+    return [
+        {"index": ref.index, "href": ref.href, "label": ref.label}
+        for ref in doc.references
+    ]
+
+
+def _format_references(doc: CrawledDocument) -> str:
+    """Format references as markdown lines."""
+    if not doc.references:
+        return f"No references found for {doc.final_url}"
+
+    return "\n".join(
+        f"[{ref.index}] {ref.label} - {ref.href}" for ref in doc.references
+    )
+
+
 def _url_to_filename(url: str) -> str:
     """Convert URL to a safe filename."""
     from urllib.parse import urlparse
@@ -166,8 +140,67 @@ def _write_output(
     output: Optional[str],
     json_output: bool,
     remove_links: bool = False,
+    links_only: bool = False,
 ) -> None:
     """Write documents to output destination."""
+    if links_only:
+
+        def _render_doc(doc: CrawledDocument) -> str:
+            if json_output:
+                return json.dumps(
+                    _references_to_list(doc),
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            return _format_references(doc)
+
+        if len(docs) == 1:
+            rendered = _render_doc(docs[0])
+            if output is None:
+                print(rendered)
+                return
+
+            path = Path(output)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered)
+            logging.info("Wrote %s", path)
+            return
+
+        def _render_combined() -> str:
+            blocks: List[str] = []
+            for doc in docs:
+                blocks.append(f"--- {doc.final_url} ---")
+                blocks.append(_render_doc(doc))
+            return "\n\n".join(blocks)
+
+        if output is None:
+            print(_render_combined())
+            return
+
+        out_path = Path(output)
+        is_directory_output = False
+        if output.endswith(("/", "\\")):
+            is_directory_output = True
+        elif out_path.exists() and out_path.is_dir():
+            is_directory_output = True
+        elif not out_path.exists() and out_path.suffix == "":
+            is_directory_output = True
+
+        if is_directory_output:
+            out_path.mkdir(parents=True, exist_ok=True)
+            extension = ".json" if json_output else ".md"
+            for doc in docs:
+                filename = _url_to_filename(doc.final_url) + extension
+                path = out_path / filename
+                path.write_text(_render_doc(doc))
+                logging.info("Wrote %s", path)
+            return
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(_render_combined())
+        logging.info("Wrote %s", out_path)
+        return
+
     # Apply link removal if requested
     if remove_links and not json_output:
         for doc in docs:
@@ -318,10 +351,16 @@ Examples:
         dest="json_output",
         help="Output as JSON (includes metadata and references)",
     )
-    parser.add_argument(
+    links_group = parser.add_mutually_exclusive_group()
+    links_group.add_argument(
         "--remove-links",
         action="store_true",
         help="Remove all links from markdown output",
+    )
+    links_group.add_argument(
+        "--links-only",
+        action="store_true",
+        help="Output only extracted references (links)",
     )
     parser.add_argument(
         "-v",
@@ -406,6 +445,7 @@ async def _run_crawl_async(args: argparse.Namespace) -> int:
         args.output,
         args.json_output,
         remove_links=args.remove_links,
+        links_only=getattr(args, "links_only", False),
     )
 
     return 0 if successful else 1

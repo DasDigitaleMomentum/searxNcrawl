@@ -24,7 +24,7 @@ This feature provides local command-line operation for crawl and search workflow
 
 ### Technical Flow
 
-1. Module import invokes `_load_config` to populate environment variables.
+1. Module import invokes shared `crawler.env.load_config()` to populate environment variables.
 2. Entrypoint (`main` or `search_main`) parses args and configures logging.
 3. Async runner executes core operation (`_run_crawl_async` / `_run_search_async`).
 4. Output helpers serialize docs/results as markdown or JSON and write destinations.
@@ -34,16 +34,17 @@ This feature provides local command-line operation for crawl and search workflow
 
 | Module | Symbols | Role |
 |--------|---------|------|
-| [crawler-cli](../modules/crawler-cli.md) | `_load_config`, `_parse_crawl_args`, `_run_crawl_async`, `_parse_search_args`, `_run_search_async`, `_write_output`, `main`, `search_main` | End-to-end CLI behavior. |
+| [crawler-cli](../modules/crawler-cli.md) | `_parse_crawl_args`, `_run_crawl_async`, `_parse_search_args`, `_run_search_async`, `_write_output`, `main`, `search_main` | End-to-end CLI behavior. |
+| [crawler-env](../modules/crawler-env.md) | `load_config` | Shared `.env` loading with CWD → config-dir fallback. |
 | [crawler-package-api](../modules/crawler-package-api.md) | `crawl_page_async`, `crawl_pages_async`, `crawl_site_async` | Core crawl operations invoked by CLI. |
 | [crawler-document-pipeline](../modules/crawler-document-pipeline.md) | `CrawledDocument` | Structured crawl output consumed by serializers. |
 
 ## Configuration
 
-- `.env` search order:
+- `.env` search order (implemented in shared `crawler/env.py`, used by both CLI and MCP server):
   1. `./.env`
   2. `~/.config/searxncrawl/.env`
-  3. Auto-copy from `.env.example` when available (`crawler/cli.py:24`-`crawler/cli.py:61`)
+  3. Auto-copy from `.env.example` when available (`crawler/env.py:39`-`crawler/env.py:63`)
 - Important env vars: `SEARXNG_URL`, `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/cli.py:494`-`crawler/cli.py:496`).
 - Packaging entrypoints: `crawl`, `search` scripts (`pyproject.toml:23`, `pyproject.toml:24`).
 

@@ -36,10 +36,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
-from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .document import CrawledDocument
+from .env import load_config
 
 # Configure logging
 logging.basicConfig(
@@ -49,8 +49,8 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger(__name__)
 
-# Load .env before reading environment variables
-load_dotenv()
+# Load .env with config-dir fallback before reading environment variables
+load_config()
 
 # SearXNG configuration from environment
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")

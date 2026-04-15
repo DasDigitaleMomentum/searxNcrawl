@@ -13,6 +13,9 @@ Usage:
     # HTTP (for remote access)
     python -m crawler.mcp_server --transport http --port 8000
 
+    # HTTP with CORS enabled for specific origins
+    python -m crawler.mcp_server --transport http --cors-origins "http://localhost:3000"
+
     # Or via FastMCP CLI
     fastmcp run crawler/mcp_server.py:mcp --transport http --port 8000
 
@@ -573,6 +576,12 @@ Examples:
     # Custom host/port
     python -m crawler.mcp_server --transport http --host 0.0.0.0 --port 9000
 
+    # Enable CORS for specific origins (required for browser-based MCP clients)
+    python -m crawler.mcp_server --transport http --cors-origins "http://localhost:3000,https://myapp.com"
+
+    # Enable CORS for all origins (use with caution)
+    python -m crawler.mcp_server --transport http --cors-origins "*"
+
     # With custom SearXNG instance
     SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 """,
@@ -594,6 +603,16 @@ Examples:
         default=8000,
         help="Port to bind to for HTTP transport (default: 8000)",
     )
+    parser.add_argument(
+        "--cors-origins",
+        default=None,
+        help=(
+            "Comma-separated list of allowed CORS origins for HTTP transport. "
+            'Use "*" to allow all origins. '
+            "If not set, no CORS headers are sent. "
+            'Example: --cors-origins "http://localhost:3000,https://myapp.com"'
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -603,7 +622,30 @@ Examples:
 
     if args.transport == "http":
         LOGGER.info("Starting MCP server on http://%s:%d/mcp", args.host, args.port)
-        mcp.run(transport="http", host=args.host, port=args.port)
+
+        run_kwargs: dict[str, Any] = {
+            "transport": "http",
+            "host": args.host,
+            "port": args.port,
+        }
+
+        if args.cors_origins:
+            from starlette.middleware import Middleware
+            from starlette.middleware.cors import CORSMiddleware
+
+            origins = [o.strip() for o in args.cors_origins.split(",")]
+            LOGGER.info("CORS enabled for origins: %s", origins)
+            run_kwargs["middleware"] = [
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=origins,
+                    allow_credentials=True,
+                    allow_methods=["*"],
+                    allow_headers=["*"],
+                ),
+            ]
+
+        mcp.run(**run_kwargs)
     else:
         LOGGER.info("Starting MCP server with STDIO transport")
         mcp.run(transport="stdio")

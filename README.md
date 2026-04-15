@@ -42,6 +42,7 @@ It also includes built-in **markdown deduplication** and early support for **aut
 ### MCP Server
 - **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.)
 - **HTTP transport** - For remote access and web integrations
+- **CORS support** - Configurable cross-origin resource sharing for browser-based MCP clients (`--cors-origins`)
 
 ## Installation
 
@@ -70,6 +71,12 @@ python -m crawler.mcp_server --transport http --port 8000
 
 # Custom host binding
 python -m crawler.mcp_server --transport http --host 0.0.0.0 --port 9000
+
+# Enable CORS for specific origins (required for browser-based MCP clients)
+python -m crawler.mcp_server --transport http --cors-origins "http://localhost:3000,https://myapp.com"
+
+# Enable CORS for all origins (use with caution)
+python -m crawler.mcp_server --transport http --cors-origins "*"
 
 # Or via installed script
 crawl-mcp --transport http --port 8000
@@ -115,6 +122,27 @@ cp .env.example ~/.config/searxncrawl/.env
 # Option 2: Export environment variable
 export SEARXNG_URL=http://your-searxng:8888
 ```
+
+#### CORS Configuration (HTTP Transport)
+
+When using HTTP transport, browser-based MCP clients may need CORS (Cross-Origin Resource Sharing) headers. Use `--cors-origins` to enable them:
+
+```bash
+# Allow specific origins
+crawl-mcp --transport http --cors-origins "http://localhost:3000,https://myapp.com"
+
+# Allow all origins (convenient for local dev, but use with caution in production)
+crawl-mcp --transport http --cors-origins "*"
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cors-origins` | (none) | Comma-separated allowed origins. If not set, no CORS headers are sent. Use `*` to allow all origins. |
+
+**Security notes:**
+- Without `--cors-origins`, the server sends no CORS headers (browsers will block cross-origin requests).
+- Using `*` allows any website to call your MCP server — only appropriate for local/trusted networks.
+- For production, whitelist specific origins instead.
 
 ### MCP Harness Configuration
 

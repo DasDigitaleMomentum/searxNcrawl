@@ -28,6 +28,7 @@ version: 1.0
 | `crawler-document-pipeline` | module | Uses `CrawledDocument` type and serialization support (`crawler/mcp_server.py:40`). |
 | `fastmcp.FastMCP` | library | MCP framework for declaring tools and running server (`crawler/mcp_server.py:38`, `crawler/mcp_server.py:59`). |
 | `httpx` | library | SearXNG HTTP client for search tool (`crawler/mcp_server.py:36`, `crawler/mcp_server.py:332`). |
+| `starlette` | library | CORS middleware for HTTP transport (`CORSMiddleware`), transitive dependency of FastMCP. |
 | `python-dotenv` | library | Transitively used via shared `crawler.env` config loader (`crawler/env.py`). |
 
 ## Structure
@@ -74,6 +75,7 @@ version: 1.0
 - Runtime CLI args for server process:
   - `--transport` (`stdio`/`http`) (`crawler/mcp_server.py:485`)
   - `--host` and `--port` for HTTP mode (`crawler/mcp_server.py:491`, `crawler/mcp_server.py:496`)
+  - `--cors-origins` for CORS in HTTP mode (`crawler/mcp_server.py:606`): comma-separated allowed origins. When set, Starlette `CORSMiddleware` is injected via FastMCP's `middleware=` parameter. Use `"*"` to allow all origins. If not set, no CORS headers are sent.
 
 ## Dedup Parameters and Metadata
 

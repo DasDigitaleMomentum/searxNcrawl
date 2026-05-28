@@ -40,7 +40,7 @@ It also includes built-in **markdown deduplication** and early support for **aut
 - **Global installation** - Available system-wide after `pip install -e .`
 
 ### MCP Server
-- **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.)
+- **STDIO transport** - For MCP harnesses (Zed, opencode, antigravity, VS Code, Claude Code, Codex, OpenClaw, etc.). Noise-free startup with suppressed verbose output and UTF-8 encoding for cross-platform reliability (incl. Windows).
 - **HTTP transport** - For remote access and web integrations
 - **CORS support** - Configurable cross-origin resource sharing for browser-based MCP clients (`--cors-origins`)
 

@@ -87,6 +87,18 @@ class OutputFormat(str, Enum):
     json = "json"
 
 
+def _configure_stdio_encoding() -> None:
+    """Best-effort UTF-8 encoding for stdio transport streams."""
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        # Best-effort only: do not block MCP startup if unsupported.
+        pass
+
+
 def _format_timestamp() -> str:
     """Get current timestamp in ISO format."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -647,6 +659,7 @@ Examples:
 
         mcp.run(**run_kwargs)
     else:
+        _configure_stdio_encoding()
         LOGGER.info("Starting MCP server with STDIO transport")
         mcp.run(transport="stdio")
 

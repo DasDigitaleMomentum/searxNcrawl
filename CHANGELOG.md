@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-05-28
+
+### Fixed
+- Prevented MCP stdio protocol corruption from noisy Crawl4AI initialization output by disabling verbose defaults in `build_markdown_run_config()` and `build_discovery_run_config()`.
+- Hardened MCP stdio startup for Windows and other non-UTF-8 locales by forcing UTF-8 stdio encoding with replacement error handling.
+
+## [0.23.0] - 2026-05-28
+
+### Added
+- CORS support for HTTP transport via `--cors-origins` flag, enabling browser-based MCP clients to connect.
+
+### Fixed
+- Shared `.env` config loading between CLI and MCP server for consistent environment resolution.
+
 ## [0.22.0] - 2026-04-08
 
 ### Added

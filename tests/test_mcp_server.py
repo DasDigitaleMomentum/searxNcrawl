@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -141,3 +142,31 @@ async def test_mcp_crawl_auth_error_propagates_from_resolver(
     assert (
         "Auth storage_state file not found" in payload["documents"][0]["error_message"]
     )
+
+
+def test_configure_stdio_encoding_calls_reconfigure() -> None:
+    """UTF-8 stdio config should call reconfigure on both streams."""
+    mock_stdout = MagicMock()
+    mock_stderr = MagicMock()
+
+    with (
+        patch.object(mcp_server.sys, "stdout", mock_stdout),
+        patch.object(mcp_server.sys, "stderr", mock_stderr),
+    ):
+        mcp_server._configure_stdio_encoding()
+
+    mock_stdout.reconfigure.assert_called_once_with(encoding="utf-8", errors="replace")
+    mock_stderr.reconfigure.assert_called_once_with(encoding="utf-8", errors="replace")
+
+
+def test_configure_stdio_encoding_skips_streams_without_reconfigure() -> None:
+    """Missing reconfigure should be a safe no-op."""
+
+    class StreamWithoutReconfigure:
+        pass
+
+    with (
+        patch.object(mcp_server.sys, "stdout", StreamWithoutReconfigure()),
+        patch.object(mcp_server.sys, "stderr", StreamWithoutReconfigure()),
+    ):
+        mcp_server._configure_stdio_encoding()

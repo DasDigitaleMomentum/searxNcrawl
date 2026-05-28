@@ -264,3 +264,35 @@ class TestCorsIntegration:
         call_kwargs = mock_mcp.run.call_args[1]
         # STDIO transport should just get transport="stdio", no middleware
         assert call_kwargs == {"transport": "stdio"}
+
+    def test_stdio_transport_invokes_encoding_configuration(self) -> None:
+        """STDIO transport should enable UTF-8 stdio configuration."""
+        from crawler import mcp_server
+
+        mock_mcp = MagicMock()
+        mock_mcp.run = MagicMock()
+
+        with (
+            patch.object(mcp_server, "mcp", mock_mcp),
+            patch.object(mcp_server, "_configure_stdio_encoding") as mock_configure,
+            patch("sys.argv", ["crawl-mcp", "--transport", "stdio"]),
+        ):
+            mcp_server.main()
+
+        mock_configure.assert_called_once()
+
+    def test_http_transport_skips_encoding_configuration(self) -> None:
+        """HTTP transport should not configure stdio encoding."""
+        from crawler import mcp_server
+
+        mock_mcp = MagicMock()
+        mock_mcp.run = MagicMock()
+
+        with (
+            patch.object(mcp_server, "mcp", mock_mcp),
+            patch.object(mcp_server, "_configure_stdio_encoding") as mock_configure,
+            patch("sys.argv", ["crawl-mcp", "--transport", "http"]),
+        ):
+            mcp_server.main()
+
+        mock_configure.assert_not_called()

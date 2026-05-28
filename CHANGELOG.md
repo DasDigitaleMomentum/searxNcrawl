@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-05-28
+
+### Fixed
+- Corrected BFS→DFS documentation references in README, MCP tool docstring, CLI help text, and module docstring to match the actual `DFSDeepCrawlStrategy` implementation (closes #18).
+
 ## [0.24.0] - 2026-05-28
 
 ### Fixed

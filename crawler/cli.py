@@ -307,7 +307,7 @@ Examples:
     parser.add_argument(
         "--site",
         action="store_true",
-        help="Crawl entire site starting from URL (BFS strategy)",
+        help="Crawl entire site starting from URL (DFS strategy)",
     )
     parser.add_argument(
         "--max-depth",

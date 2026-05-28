@@ -300,7 +300,7 @@ async def crawl_site(
     storage_state: Optional[str] = None,
 ):
     """
-    Crawl an entire website starting from a seed URL using BFS strategy.
+    Crawl an entire website starting from a seed URL using DFS strategy.
 
     Args:
         url: The seed URL to start crawling from

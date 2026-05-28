@@ -13,7 +13,7 @@ It also includes built-in **markdown deduplication** and early support for **aut
 ### Crawling (Crawl4AI + proven defaults)
 - **Single page crawling** - Crawl one URL and return clean markdown
 - **Multiple pages** - Batch crawl a list of URLs with concurrency control
-- **Site crawling** - BFS strategy with max depth and page limits
+- **Site crawling** - DFS strategy with max depth and page limits
 - **Proven extraction config** - Production-tested selectors/exclusions and markdown tuning for docs-style websites
 
 ### Content Quality
@@ -286,7 +286,7 @@ crawl(urls=["https://example.com"], storage_state="/path/to/state.json")
 
 #### `crawl_site`
 
-Crawl an entire website starting from a seed URL using BFS strategy.
+Crawl an entire website starting from a seed URL using DFS strategy.
 
 **Parameters:**
 | Parameter | Type | Default | Description |
@@ -493,7 +493,7 @@ docs = await crawl_pages_async(
 )
 ```
 
-### Site Crawl (BFS)
+### Site Crawl (DFS)
 
 ```python
 from crawler import crawl_site, crawl_site_async

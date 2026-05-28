@@ -5,7 +5,7 @@ their content as markdown. It supports:
 
 - Single page crawling
 - Multiple pages crawling (batch)
-- Site crawling with depth/page limits (BFS strategy)
+- Site crawling with depth/page limits (DFS strategy)
 
 Example usage:
 

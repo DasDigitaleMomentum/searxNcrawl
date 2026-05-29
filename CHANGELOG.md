@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-05-29
+
+### Changed
+- Restructured README from 731 to 291 lines with Quick Start, feature matrix, and compact sections.
+- Extracted MCP tool reference, output format details, and session capture guide to `docs/usage/`.
+- Docker Compose promoted to first-class installation path with SearXNG included.
+
 ## [0.24.1] - 2026-05-28
 
 ### Fixed

@@ -23,6 +23,8 @@ Environment Variables:
     SEARXNG_URL: SearXNG instance URL (default: http://localhost:8888)
     SEARXNG_USERNAME: Optional basic auth username
     SEARXNG_PASSWORD: Optional basic auth password
+    STORAGE_STATE_DIR: Directory for storage_state files used by MCP tools
+                       (default: ~/.config/searxncrawl/states)
 """
 
 from __future__ import annotations
@@ -36,11 +38,13 @@ import sys
 import time
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
 from fastmcp import FastMCP
 
+from .auth import AuthConfigError, resolve_auth
 from .document import CrawledDocument
 from .env import load_config
 
@@ -59,6 +63,13 @@ load_config()
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
 SEARXNG_USERNAME = os.getenv("SEARXNG_USERNAME")
 SEARXNG_PASSWORD = os.getenv("SEARXNG_PASSWORD")
+
+# Storage-state directory for MCP tools (CWE-22 mitigation).
+# Only storage_state files under this directory are accepted from MCP clients.
+_DEFAULT_STORAGE_STATE_DIR = str(
+    Path.home() / ".config" / "searxncrawl" / "states"
+)
+STORAGE_STATE_DIR = os.getenv("STORAGE_STATE_DIR", _DEFAULT_STORAGE_STATE_DIR)
 
 # Create the MCP server
 mcp = FastMCP(
@@ -197,6 +208,31 @@ def _format_output(
         return output
 
 
+def _validate_mcp_storage_state(storage_state: Optional[str]) -> Optional[str]:
+    """Validate and confine storage_state for MCP tool invocations.
+
+    MCP tools are exposed to untrusted callers (agents, remote clients).
+    This function ensures the supplied ``storage_state`` path is confined
+    to :data:`STORAGE_STATE_DIR`, blocking path-traversal attacks
+    (CWE-22).
+
+    Returns the validated ``storage_state`` value unchanged when it passes,
+    or raises :class:`AuthConfigError` on violations.
+    """
+    if storage_state is None:
+        return None
+
+    # Eagerly validate by running resolve_auth with path restriction.
+    # This will raise AuthConfigError for paths outside the allowed dir.
+    resolve_auth(
+        {"storage_state": storage_state},
+        restrict_paths=True,
+        storage_state_dir=STORAGE_STATE_DIR,
+    )
+
+    return storage_state
+
+
 # =============================================================================
 # CRAWL TOOLS
 # =============================================================================
@@ -224,7 +260,9 @@ async def crawl(
         timeout: Per-URL timeout in seconds (default: 30, must be >= 1)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
-        storage_state: Path to Playwright storage_state JSON for authenticated crawling
+        storage_state: Path to Playwright storage_state JSON for authenticated
+            crawling.  Must reside inside the configured STORAGE_STATE_DIR
+            (default: ~/.config/searxncrawl/states/).
 
     Returns:
         Crawled content in the specified format.
@@ -252,6 +290,9 @@ async def crawl(
         fmt = OutputFormat(output_format.lower())
     except ValueError:
         fmt = OutputFormat.markdown
+
+    # Validate storage_state path (CWE-22 mitigation)
+    _validate_mcp_storage_state(storage_state)
 
     LOGGER.info("Crawling %d URL(s)...", len(urls))
     auth = {"storage_state": storage_state} if storage_state else None
@@ -313,7 +354,9 @@ async def crawl_site(
         timeout: Overall site crawl timeout in seconds (default: 120, must be >= 1)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
-        storage_state: Path to Playwright storage_state JSON for authenticated crawling
+        storage_state: Path to Playwright storage_state JSON for authenticated
+            crawling.  Must reside inside the configured STORAGE_STATE_DIR
+            (default: ~/.config/searxncrawl/states/).
 
     Returns:
         Crawled content from all pages in the specified format.
@@ -322,17 +365,11 @@ async def crawl_site(
         # Basic site crawl
         crawl_site(url="https://docs.example.com")
 
-        # Deep crawl with more pages
-        crawl_site(url="https://docs.example.com", max_depth=3, max_pages=50)
+        # Shallow crawl with more pages
+        crawl_site(url="https://docs.example.com", max_depth=1, max_pages=50)
 
-        # Include subdomains
-        crawl_site(url="https://example.com", include_subdomains=True)
-
-        # JSON output with stats
-        crawl_site(url="https://docs.example.com", output_format="json")
-
-        # Clean output without links
-        crawl_site(url="https://docs.example.com", remove_links=True)
+        # Deep crawl with subdomains
+        crawl_site(url="https://example.com", max_depth=3, include_subdomains=True)
     """
     from . import crawl_site_async
 
@@ -345,33 +382,35 @@ async def crawl_site(
     except ValueError:
         fmt = OutputFormat.markdown
 
-    LOGGER.info(
-        "Starting site crawl: %s (max_depth=%d, max_pages=%d)",
-        url,
-        max_depth,
-        max_pages,
-    )
+    # Validate storage_state path (CWE-22 mitigation)
+    _validate_mcp_storage_state(storage_state)
+
+    LOGGER.info("Starting site crawl: %s (max_depth=%d, max_pages=%d)", url, max_depth, max_pages)
 
     try:
-        result = await crawl_site_async(
-            url,
-            max_depth=max_depth,
-            max_pages=max_pages,
-            include_subdomains=include_subdomains,
-            dedup_mode=dedup_mode,
-            auth={"storage_state": storage_state} if storage_state else None,
-            timeout=timeout,
+        result = await asyncio.wait_for(
+            crawl_site_async(
+                url,
+                max_depth=max_depth,
+                max_pages=max_pages,
+                include_subdomains=include_subdomains,
+                dedup_mode=dedup_mode,
+                auth={"storage_state": storage_state} if storage_state else None,
+                timeout=timeout,
+            ),
+            timeout=timeout + 10,  # Grace period for cleanup
         )
     except TimeoutError:
+        LOGGER.warning("Site crawl timed out after %ds", timeout)
         timeout_doc = CrawledDocument(
             request_url=url,
             final_url=url,
             status="failed",
             markdown="",
-            error_message="Site crawl timed out",
+            error_message=f"Site crawl timed out after {timeout}s",
         )
         timeout_stats = {
-            "total_pages": 1,
+            "total_pages": 0,
             "successful_pages": 0,
             "failed_pages": 1,
             "error_count": 1,
@@ -574,9 +613,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Environment Variables:
-    SEARXNG_URL       SearXNG instance URL (default: http://localhost:8888)
-    SEARXNG_USERNAME  Optional basic auth username
-    SEARXNG_PASSWORD  Optional basic auth password
+    SEARXNG_URL        SearXNG instance URL (default: http://localhost:8888)
+    SEARXNG_USERNAME   Optional basic auth username
+    SEARXNG_PASSWORD   Optional basic auth password
+    STORAGE_STATE_DIR  Directory for storage_state files used by MCP tools
+                       (default: ~/.config/searxncrawl/states)
 
 Examples:
     # STDIO transport (default, for Claude Desktop)
@@ -631,6 +672,7 @@ Examples:
     # Log configuration
     LOGGER.info("SearXNG URL: %s", SEARXNG_URL)
     LOGGER.info("SearXNG Auth: %s", "Enabled" if SEARXNG_USERNAME else "Disabled")
+    LOGGER.info("Storage state dir: %s", STORAGE_STATE_DIR)
 
     if args.transport == "http":
         LOGGER.info("Starting MCP server on http://%s:%d/mcp", args.host, args.port)

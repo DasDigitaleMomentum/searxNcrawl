@@ -23,8 +23,17 @@ def _doc(metadata: dict | None = None) -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_mcp_crawl_forwards_dedup_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_mcp_crawl_forwards_dedup_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     captured: dict = {}
+
+    # Set up a valid storage_state inside the allowed directory
+    states_dir = tmp_path / "states"
+    states_dir.mkdir()
+    state_file = states_dir / "state.json"
+    state_file.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+    monkeypatch.setattr(mcp_server, "STORAGE_STATE_DIR", str(states_dir))
 
     async def fake_crawl_page_async(
         url: str, *, dedup_mode: str = "exact", auth=None, timeout=None
@@ -45,18 +54,25 @@ async def test_mcp_crawl_forwards_dedup_mode(monkeypatch: pytest.MonkeyPatch) ->
         urls=["https://example.com"],
         output_format="json",
         dedup_mode="off",
-        storage_state="/tmp/state.json",
+        storage_state=str(state_file),
     )
 
     assert captured["mode"] == "off"
-    assert captured["auth"] == {"storage_state": "/tmp/state.json"}
+    assert captured["auth"] == {"storage_state": str(state_file)}
 
 
 @pytest.mark.asyncio
 async def test_mcp_crawl_site_forwards_dedup_mode(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     captured: dict = {}
+
+    # Set up a valid storage_state inside the allowed directory
+    states_dir = tmp_path / "states"
+    states_dir.mkdir()
+    state_file = states_dir / "state.json"
+    state_file.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+    monkeypatch.setattr(mcp_server, "STORAGE_STATE_DIR", str(states_dir))
 
     async def fake_site_crawl(url: str, **kwargs):
         captured["mode"] = kwargs.get("dedup_mode")
@@ -72,11 +88,11 @@ async def test_mcp_crawl_site_forwards_dedup_mode(
         url="https://example.com",
         output_format="json",
         dedup_mode="off",
-        storage_state="/tmp/state.json",
+        storage_state=str(state_file),
     )
 
     assert captured["mode"] == "off"
-    assert captured["auth"] == {"storage_state": "/tmp/state.json"}
+    assert captured["auth"] == {"storage_state": str(state_file)}
 
 
 @pytest.mark.asyncio
@@ -117,12 +133,21 @@ async def test_mcp_json_output_includes_builder_guardrail_metadata(
 
 @pytest.mark.asyncio
 async def test_mcp_crawl_auth_error_propagates_from_resolver(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
+    """Auth errors from storage_state validation are surfaced as failed docs."""
+    # Point STORAGE_STATE_DIR to a real dir so the path confinement check
+    # passes, but the file itself is missing so resolve_auth raises.
+    states_dir = tmp_path / "states"
+    states_dir.mkdir()
+    monkeypatch.setattr(mcp_server, "STORAGE_STATE_DIR", str(states_dir))
+
+    missing_file = states_dir / "missing.json"
+
     async def fake_crawl_page_async(
         url: str, *, dedup_mode: str = "exact", auth=None, timeout=None
     ):
-        raise ValueError("Auth storage_state file not found: /tmp/missing.json")
+        raise ValueError(f"Auth storage_state file not found: {missing_file}")
 
     async def fake_crawl_pages_async(
         urls, *, concurrency=3, dedup_mode="exact", auth=None, timeout=None
@@ -132,16 +157,16 @@ async def test_mcp_crawl_auth_error_propagates_from_resolver(
     monkeypatch.setattr(crawler, "crawl_page_async", fake_crawl_page_async)
     monkeypatch.setattr(crawler, "crawl_pages_async", fake_crawl_pages_async)
 
-    out = await mcp_server.crawl(
-        urls=["https://example.com"],
-        output_format="json",
-        storage_state="/tmp/missing.json",
-    )
-    payload = json.loads(out)
-    assert payload["documents"][0]["status"] == "failed"
-    assert (
-        "Auth storage_state file not found" in payload["documents"][0]["error_message"]
-    )
+    # _validate_mcp_storage_state will raise because the file doesn't exist.
+    # This should propagate as AuthConfigError (not swallowed silently).
+    from crawler.auth import AuthConfigError
+
+    with pytest.raises(AuthConfigError, match="file not found"):
+        await mcp_server.crawl(
+            urls=["https://example.com"],
+            output_format="json",
+            storage_state=str(missing_file),
+        )
 
 
 def test_configure_stdio_encoding_calls_reconfigure() -> None:

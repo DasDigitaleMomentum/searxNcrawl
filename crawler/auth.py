@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, TypeAlias, Union
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AuthConfigError(ValueError):
@@ -29,8 +32,23 @@ class ResolvedAuth:
 AuthInput: TypeAlias = Union[AuthConfig, ResolvedAuth, Mapping[str, Any]]
 
 
-def resolve_auth(auth: Optional[AuthInput]) -> Optional[ResolvedAuth]:
-    """Resolve and validate auth input into a deterministic runtime contract."""
+def resolve_auth(
+    auth: Optional[AuthInput],
+    *,
+    restrict_paths: bool = False,
+    storage_state_dir: Optional[str] = None,
+) -> Optional[ResolvedAuth]:
+    """Resolve and validate auth input into a deterministic runtime contract.
+
+    Args:
+        auth: Raw auth input (dict, AuthConfig, or ResolvedAuth).
+        restrict_paths: When True, confine ``storage_state`` to
+            *storage_state_dir*.  Should be enabled for untrusted callers
+            (MCP tools) and left False for the trusted CLI.
+        storage_state_dir: Directory that ``storage_state`` paths must
+            reside in when *restrict_paths* is True.  Ignored when
+            *restrict_paths* is False.
+    """
     if auth is None:
         return None
 
@@ -46,6 +64,10 @@ def resolve_auth(auth: Optional[AuthInput]) -> Optional[ResolvedAuth]:
         raise AuthConfigError("Auth storage_state must be a non-empty path")
 
     storage_state_path = _canonicalize_path(raw_storage_state)
+
+    # ── Path confinement (CWE-22 mitigation) ────────────────────────
+    if restrict_paths:
+        _enforce_path_confinement(storage_state_path, storage_state_dir)
 
     if not storage_state_path.exists():
         raise AuthConfigError(
@@ -79,6 +101,49 @@ def resolve_auth(auth: Optional[AuthInput]) -> Optional[ResolvedAuth]:
         )
 
     return ResolvedAuth(storage_state=str(storage_state_path))
+
+
+def _enforce_path_confinement(
+    resolved_path: Path,
+    allowed_dir: Optional[str],
+) -> None:
+    """Raise :class:`AuthConfigError` if *resolved_path* is outside *allowed_dir*.
+
+    This blocks path-traversal attacks (``..``, symlink escapes, absolute
+    paths pointing elsewhere) when the caller is untrusted (e.g. MCP
+    tool invocations).
+    """
+    if allowed_dir is None:
+        raise AuthConfigError(
+            "storage_state is not allowed: no storage-state directory configured "
+            "(set STORAGE_STATE_DIR or place files in ~/.config/searxncrawl/states/)"
+        )
+
+    allowed = Path(allowed_dir).resolve(strict=False)
+
+    # Use resolve() on the candidate so symlinks are followed before the
+    # prefix check — prevents symlink-based escapes.
+    try:
+        canonical = resolved_path.resolve(strict=False)
+    except (OSError, ValueError) as exc:
+        raise AuthConfigError(
+            f"Auth storage_state path cannot be resolved: {resolved_path}"
+        ) from exc
+
+    # Path.is_relative_to was added in Python 3.9
+    try:
+        if not canonical.is_relative_to(allowed):
+            raise AuthConfigError(
+                f"Auth storage_state path is outside the allowed directory: "
+                f"{canonical} is not inside {allowed}"
+            )
+    except AttributeError:
+        # Fallback for older Python (< 3.9)
+        if not str(canonical).startswith(str(allowed) + "/") and canonical != allowed:
+            raise AuthConfigError(
+                f"Auth storage_state path is outside the allowed directory: "
+                f"{canonical} is not inside {allowed}"
+            )
 
 
 def _coerce_auth_config(auth: AuthInput) -> AuthConfig:

@@ -10,6 +10,7 @@ import pytest
 
 import crawler
 from crawler import cli
+from crawler.cli import _filter_search_results, _parse_search_result_fields
 
 
 def _doc() -> SimpleNamespace:
@@ -385,3 +386,109 @@ def test_write_output_links_only_zero_references_json_empty_array(
 
     payload = json.loads(capsys.readouterr().out)
     assert payload == []
+
+
+def test_filter_search_results_selected_fields_and_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", "title,url")
+
+    data = {
+        "query": "python",
+        "results": [
+            {"title": "Result A", "url": "https://a.example", "content": "A"},
+            {"title": "Result B", "url": "https://b.example", "engine": "duckduckgo"},
+        ],
+        "suggestions": ["python tutorial"],
+    }
+
+    assert _filter_search_results(data) == {
+        "query": "python",
+        "number_of_results": 2,
+        "results": [
+            {"title": "Result A", "url": "https://a.example"},
+            {"title": "Result B", "url": "https://b.example"},
+        ],
+    }
+
+
+def test_filter_search_results_all_fields_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SEARCH_RESULT_FIELDS", raising=False)
+
+    data = {
+        "query": "python",
+        "results": [{"title": "Result A", "url": "https://a.example", "score": 1.0}],
+        "suggestions": ["python tutorial"],
+    }
+
+    assert _filter_search_results(data) == data
+
+
+def test_filter_search_results_all_fields_when_empty_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", "")
+
+    data = {
+        "query": "python",
+        "results": [{"title": "Result A", "url": "https://a.example", "score": 1.0}],
+        "suggestions": ["python tutorial"],
+    }
+
+    assert _filter_search_results(data) == data
+
+
+def test_filter_search_results_empty_results_array(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", "title,url")
+
+    data = {"query": "python", "results": []}
+
+    assert _filter_search_results(data) == {
+        "query": "python",
+        "number_of_results": 0,
+        "results": [],
+    }
+
+
+def test_filter_search_results_missing_requested_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", "title,url")
+
+    data = {
+        "query": "python",
+        "results": [
+            {"title": "Has only title", "content": "text"},
+            {"url": "https://only-url.example", "engine": "google"},
+            {"content": "no requested fields"},
+        ],
+    }
+
+    assert _filter_search_results(data) == {
+        "query": "python",
+        "number_of_results": 3,
+        "results": [
+            {"title": "Has only title"},
+            {"url": "https://only-url.example"},
+            {},
+        ],
+    }
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_parse_search_result_fields_returns_none_for_empty_or_whitespace(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", value)
+    assert _parse_search_result_fields() is None
+
+
+def test_parse_search_result_fields_returns_none_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SEARCH_RESULT_FIELDS", raising=False)
+    assert _parse_search_result_fields() is None

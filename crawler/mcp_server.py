@@ -44,16 +44,34 @@ from fastmcp import FastMCP
 from .document import CrawledDocument
 from .env import load_config
 
+# Load .env with config-dir fallback before reading environment variables
+load_config()
+
+
+def _resolve_log_level() -> tuple[str, int]:
+    """Resolve LOG_LEVEL env var to a validated (label, int) pair."""
+    raw_level = os.getenv("LOG_LEVEL", "INFO")
+    if not raw_level:
+        return "info", logging.INFO
+
+    label = raw_level.strip().lower()
+    level_int = getattr(logging, label.upper(), None)
+    if isinstance(level_int, int):
+        return label, level_int
+
+    # Unknown value — fall back to INFO for both label and int
+    return "info", logging.INFO
+
+
+LOG_LEVEL_STR, LOG_LEVEL_INT = _resolve_log_level()
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=LOG_LEVEL_INT,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
 LOGGER = logging.getLogger(__name__)
-
-# Load .env with config-dir fallback before reading environment variables
-load_config()
 
 # SearXNG configuration from environment
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
@@ -207,21 +225,21 @@ async def crawl(
     urls: List[str],
     output_format: str = "markdown",
     concurrency: int = 3,
-    timeout: int = 30,
+    timeout: int = 15,
     remove_links: bool = False,
     dedup_mode: str = "exact",
     storage_state: Optional[str] = None,
 ):
     """
-    Crawl one or more web pages and extract their content as markdown.
+    Crawl one or more URLs and extract content as markdown or JSON.
 
     Args:
-        urls: List of URLs to crawl (can be a single URL)
-        output_format: Output format - "markdown" (default) or "json"
+        urls: List of URLs to crawl (required). Accepts a single URL or multiple URLs.
+        output_format: 'markdown' (default) or 'json'
             - markdown: Clean concatenated markdown with URL headers and timestamps
             - json: Full JSON with metadata, references, and statistics
         concurrency: Maximum concurrent crawls (default: 3)
-        timeout: Per-URL timeout in seconds (default: 30, must be >= 1)
+        timeout: Per-URL timeout in seconds (default: 15, must be >= 1)
         remove_links: Remove all links from the markdown output (default: false)
         dedup_mode: Markdown dedup mode - "exact" (default) or "off"
         storage_state: Path to Playwright storage_state JSON for authenticated crawling
@@ -397,6 +415,42 @@ async def crawl_site(
 # =============================================================================
 
 
+def _parse_search_result_fields() -> Optional[List[str]]:
+    """Parse SEARCH_RESULT_FIELDS env var; empty/unset means all-fields mode."""
+    raw_fields = os.getenv("SEARCH_RESULT_FIELDS")
+    if raw_fields is None:
+        return None
+
+    fields = [field.strip() for field in raw_fields.split(",") if field.strip()]
+    if not fields:
+        return None
+
+    return fields
+
+
+def _filter_search_results(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter result fields and envelope based on SEARCH_RESULT_FIELDS."""
+    fields = _parse_search_result_fields()
+    if fields is None:
+        return data
+
+    field_set = set(fields)
+    raw_results = data.get("results")
+    results: List[Dict[str, Any]] = []
+
+    if isinstance(raw_results, list):
+        for item in raw_results:
+            if isinstance(item, dict):
+                filtered_item = {k: v for k, v in item.items() if k in field_set}
+                results.append(filtered_item)
+
+    return {
+        "query": data.get("query", ""),
+        "number_of_results": len(results),
+        "results": results,
+    }
+
+
 def _get_searxng_client() -> httpx.AsyncClient:
     """Create an httpx client for SearXNG with optional basic auth."""
     auth = None
@@ -441,13 +495,11 @@ async def search(
         max_retries: Maximum attempts for transient RequestError failures (default: 3)
 
     Returns:
-        JSON string with search results including:
-        - query: The search query
-        - number_of_results: Count of results returned
-        - results: Array of result objects with title, url, content, engine, etc.
-        - answers: Direct answers if available
-        - suggestions: Related search suggestions
-        - corrections: Spelling corrections if any
+        JSON string with search results.
+        SEARCH_RESULT_FIELDS controls the response shape:
+        - unset/empty: full SearXNG payload (backward-compatible)
+        - set (comma-separated): each result keeps only listed fields and
+          envelope is trimmed to {query, number_of_results, results}
 
     Examples:
         # Basic search
@@ -532,6 +584,8 @@ async def search(
         if "results" in data:
             data["results"] = data["results"][:max_results]
             data["number_of_results"] = len(data["results"])
+
+        data = _filter_search_results(data)
 
         elapsed = time.monotonic() - start
         LOGGER.info(
@@ -629,6 +683,12 @@ Examples:
     args = parser.parse_args()
 
     # Log configuration
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        LOGGER.info("searxNcrawl v%s starting", _pkg_version("searxNcrawl"))
+    except Exception:
+        LOGGER.info("searxNcrawl starting")
     LOGGER.info("SearXNG URL: %s", SEARXNG_URL)
     LOGGER.info("SearXNG Auth: %s", "Enabled" if SEARXNG_USERNAME else "Disabled")
 
@@ -657,11 +717,12 @@ Examples:
                 ),
             ]
 
+        run_kwargs["log_level"] = LOG_LEVEL_STR
         mcp.run(**run_kwargs)
     else:
         _configure_stdio_encoding()
         LOGGER.info("Starting MCP server with STDIO transport")
-        mcp.run(transport="stdio")
+        mcp.run(transport="stdio", log_level=LOG_LEVEL_STR)
 
 
 if __name__ == "__main__":

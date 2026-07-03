@@ -8,12 +8,12 @@ Published at [github.com/DasDigitaleMomentum/searxNcrawl](https://github.com/Das
 
 Pick your setup:
 
-### Docker Compose (everything included)
+### Docker Compose
 
-SearXNG, Playwright, and the MCP server — one command.
+MCP server with Playwright/Chromium, ready in one command. SearXNG required separately for search.
 
 ```bash
-cp .env.example .env          # edit SEARXNG_URL if needed
+cp .env.example .env          # set SEARXNG_URL to your SearXNG instance
 docker compose up --build
 ```
 
@@ -45,7 +45,7 @@ uv run playwright install chromium
 | MCP Server (STDIO)      | —              | ✅        |
 | MCP Server (HTTP)       | ✅             | ✅        |
 | Web Crawl               | ✅             | ✅        |
-| Web Search              | ✅ (included)  | ✅¹       |
+| Web Search              | ✅¹            | ✅¹       |
 | CLI Tools               | via `exec`²    | ✅        |
 | Python API              | —              | ✅        |
 | CORS (HTTP)             | ✅             | ✅        |
@@ -83,17 +83,18 @@ uv run playwright install chromium
 
 ### Docker Compose
 
-The Compose stack includes searxNcrawl + SearXNG + Playwright/Chromium.
+The Compose stack includes searxNcrawl + Playwright/Chromium. SearXNG must be provided separately.
 
 ```bash
 cp .env.example .env
-# Edit .env: set SEARXNG_URL if using external SearXNG, or keep default
+# Edit .env: set SEARXNG_URL to your SearXNG instance
 docker compose up --build
 ```
 
-| Variable    | Default                   | Description             |
-| ----------- | ------------------------- | ----------------------- |
-| `MCP_PORT`  | `9555`                    | MCP server HTTP port    |
+| Variable    | Default                   | Description                                                   |
+| ----------- | ------------------------- | ------------------------------------------------------------- |
+| `MCP_PORT`  | `9555`                    | MCP server HTTP port                                          |
+| `LOG_LEVEL` | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 
 The MCP server is available at `http://localhost:9555/mcp`.
 
@@ -117,15 +118,23 @@ uv run playwright install chromium
 
 ### SearXNG (search feature)
 
-The `search` tool and CLI command require a SearXNG instance with **JSON output enabled** (`search.formats` in `settings.yml`). Docker Compose includes one automatically. For pip/uv, you need your own — self-hosting is recommended over public instances (rate limits).
+The `search` tool and CLI command require a SearXNG instance with **JSON output enabled** (`search.formats` in `settings.yml`). For all setups you need your own instance — self-hosting is recommended over public instances (rate limits).
 
 **Environment variables:**
 
-| Variable          | Default                 | Description              |
-| ----------------- | ----------------------- | ------------------------ |
-| `SEARXNG_URL`     | `http://localhost:8888` | SearXNG instance URL     |
-| `SEARXNG_USERNAME` | (none)                  | Optional basic auth user |
-| `SEARXNG_PASSWORD` | (none)                  | Optional basic auth pass |
+| Variable               | Example / Recommended                 | Description                                                                                                                         |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `SEARXNG_URL`          | `http://localhost:8888`               | SearXNG instance URL                                                                                                                |
+| `SEARXNG_USERNAME`     | (none)                                | Optional basic auth user                                                                                                            |
+| `SEARXNG_PASSWORD`     | (none)                                | Optional basic auth pass                                                                                                            |
+| `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate`     | Comma-separated result fields. Unset = all SearXNG fields. Available: title, url, content, publishedDate, engine, score, category, img_src, thumbnail |
+
+Example `.env`:
+```bash
+SEARXNG_URL=http://localhost:8888
+SEARCH_RESULT_FIELDS=title,url,content,publishedDate
+LOG_LEVEL=INFO
+```
 
 **Config file search order** (CLI tools only):
 

@@ -8,6 +8,7 @@ import pytest
 
 import crawler
 from crawler import mcp_server
+from crawler.mcp_server import _resolve_log_level
 
 
 def _doc(metadata: dict | None = None) -> SimpleNamespace:
@@ -170,3 +171,27 @@ def test_configure_stdio_encoding_skips_streams_without_reconfigure() -> None:
         patch.object(mcp_server.sys, "stderr", StreamWithoutReconfigure()),
     ):
         mcp_server._configure_stdio_encoding()
+
+
+def test_resolve_log_level_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    assert _resolve_log_level() == ("warning", 30)
+
+
+def test_resolve_log_level_info_lowercase(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOG_LEVEL", "info")
+    assert _resolve_log_level() == ("info", 20)
+
+
+def test_resolve_log_level_invalid_falls_back_to_info(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOG_LEVEL", "invalid")
+    assert _resolve_log_level() == ("info", 20)
+
+
+def test_resolve_log_level_unset_defaults_to_info(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    assert _resolve_log_level() == ("info", 20)

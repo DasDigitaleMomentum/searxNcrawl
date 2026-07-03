@@ -91,6 +91,42 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _parse_search_result_fields() -> Optional[List[str]]:
+    """Parse SEARCH_RESULT_FIELDS env var; empty/unset means all-fields mode."""
+    raw_fields = os.getenv("SEARCH_RESULT_FIELDS")
+    if raw_fields is None:
+        return None
+
+    fields = [field.strip() for field in raw_fields.split(",") if field.strip()]
+    if not fields:
+        return None
+
+    return fields
+
+
+def _filter_search_results(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter result fields and envelope based on SEARCH_RESULT_FIELDS."""
+    fields = _parse_search_result_fields()
+    if fields is None:
+        return data
+
+    field_set = set(fields)
+    raw_results = data.get("results")
+    results: List[Dict[str, Any]] = []
+
+    if isinstance(raw_results, list):
+        for item in raw_results:
+            if isinstance(item, dict):
+                filtered_item = {k: v for k, v in item.items() if k in field_set}
+                results.append(filtered_item)
+
+    return {
+        "query": data.get("query", ""),
+        "number_of_results": len(results),
+        "results": results,
+    }
+
+
 def _doc_to_dict(doc: CrawledDocument) -> dict:
     """Convert document to JSON-serializable dict."""
     return {
@@ -873,6 +909,8 @@ async def _run_search_async(args: argparse.Namespace) -> int:
         if "results" in data:
             data["results"] = data["results"][:max_results]
             data["number_of_results"] = len(data["results"])
+
+        data = _filter_search_results(data)
 
         logging.info("Found %d results", data.get("number_of_results", 0))
 

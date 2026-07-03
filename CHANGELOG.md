@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-03
+
+### Added
+- `SEARCH_RESULT_FIELDS` environment variable to control which fields are returned per search result (MCP + CLI). Default recommended value: `title,url,content,publishedDate`. Unset = all SearXNG fields (backward-compatible). Available fields: title, url, content, publishedDate, engine, score, category, img_src, thumbnail. (closes #23)
+- `LOG_LEVEL` environment variable for MCP server log verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL). Controls both root logger and uvicorn/FastMCP log level via `mcp.run(log_level=...)`. Default: INFO. (closes #24)
+- Version logging at MCP server startup (`searxNcrawl v0.25.0 starting`).
+
+### Changed
+- MCP `crawl()` default timeout reduced from 30s to 15s for faster feedback on unresponsive pages.
+- README: corrected Docker Compose SearXNG documentation (SearXNG is not bundled, must be provided separately).
+
+### Fixed
+- `.env` is now loaded before logging configuration, enabling `LOG_LEVEL` to take effect at startup.
+
 ## [0.24.2] - 2026-05-29
 
 ### Changed

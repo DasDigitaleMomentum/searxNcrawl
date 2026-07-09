@@ -94,7 +94,8 @@ docker compose up --build
 | Variable    | Default                   | Description                                                   |
 | ----------- | ------------------------- | ------------------------------------------------------------- |
 | `MCP_PORT`  | `9555`                    | MCP server HTTP port                                          |
-| `LOG_LEVEL` | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `LOG_LEVEL`       | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `ALLOWED_HOSTS`   | *(loopback only)*         | Comma-separated allowed Host headers; use `*` for all hosts (required for Docker/Podman bridge networking with `--host 0.0.0.0`) |
 
 The MCP server is available at `http://localhost:9555/mcp`.
 

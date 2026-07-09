@@ -631,6 +631,7 @@ Environment Variables:
     SEARXNG_URL       SearXNG instance URL (default: http://localhost:8888)
     SEARXNG_USERNAME  Optional basic auth username
     SEARXNG_PASSWORD  Optional basic auth password
+    ALLOWED_HOSTS     Comma-separated allowed Host headers (use "*" for all)
 
 Examples:
     # STDIO transport (default, for Claude Desktop)
@@ -650,6 +651,10 @@ Examples:
 
     # With custom SearXNG instance
     SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
+
+    # Allow non-localhost clients (required for Docker/bridge networking)
+    python -m crawler.mcp_server --transport http --host 0.0.0.0 --allowed-hosts "*"
+    ALLOWED_HOSTS="*" python -m crawler.mcp_server --transport http --host 0.0.0.0
 """,
     )
     parser.add_argument(
@@ -677,6 +682,17 @@ Examples:
             'Use "*" to allow all origins. '
             "If not set, no CORS headers are sent. "
             'Example: --cors-origins "http://localhost:3000,https://myapp.com"'
+        ),
+    )
+    parser.add_argument(
+        "--allowed-hosts",
+        default=os.getenv("ALLOWED_HOSTS", ""),
+        help=(
+            "Comma-separated list of allowed Host header values for HTTP transport. "
+            'Use "*" to disable host-header validation entirely. '
+            "By default only loopback addresses are accepted, which blocks "
+            "non-localhost clients when binding to 0.0.0.0. "
+            'Example: --allowed-hosts "172.16.0.1,myserver.local,*"'
         ),
     )
 
@@ -716,6 +732,12 @@ Examples:
                     allow_headers=["*"],
                 ),
             ]
+
+        if args.allowed_hosts:
+            allowed = [h.strip() for h in args.allowed_hosts.split(",") if h.strip()]
+            if allowed:
+                LOGGER.info("Allowed hosts: %s", allowed)
+                run_kwargs["allowed_hosts"] = allowed
 
         run_kwargs["log_level"] = LOG_LEVEL_STR
         mcp.run(**run_kwargs)

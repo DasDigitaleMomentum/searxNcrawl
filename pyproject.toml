@@ -1,6 +1,6 @@
 [project]
 name = "searxNcrawl"
-version = "0.25.0"
+version = "0.30.0"
 description = "searxNcrawl web crawler with markdown extraction - no DB, no enrichment, just crawling."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,7 +8,7 @@ dependencies = [
     "crawl4ai>=0.7.4",
     "tldextract>=5.1.2",
     "playwright>=1.40.0",
-    "fastmcp>=2.0.0",
+    "fastmcp>=3.4.3",
     "httpx>=0.27.0",
     "python-dotenv>=1.0.1",
 ]

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-15
+
+### Added
+- `--allowed-hosts` for configuring trusted HTTP `Host` headers when exposing the MCP server through Docker, a reverse proxy, or another remote deployment. Comma-separated values are normalized before being passed to FastMCP. (closes #25)
+- Documented FastMCP's existing `FASTMCP_HTTP_ALLOWED_HOSTS` JSON-list environment setting as the environment-based alternative.
+
+### Changed
+- Raised the FastMCP minimum version from 2.0.0 to 3.4.3 so the declared dependency range guarantees support for the Host/Origin guard configuration used by searxNcrawl.
+- `--cors-origins` now configures both FastMCP's request-time Origin allowlist and Starlette's CORS response middleware.
+
+### Fixed
+- Restored configurable remote HTTP access after FastMCP 3.4.3 introduced Host/Origin protection that rejected non-loopback Host headers with HTTP 421 when binding to `0.0.0.0`. Secure defaults remain active unless an allowlist is explicitly configured. (closes #25)
+
 ## [0.25.0] - 2026-07-03
 
 ### Added

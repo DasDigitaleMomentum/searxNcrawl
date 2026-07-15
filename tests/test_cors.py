@@ -1,298 +1,184 @@
-"""Tests for CORS middleware configuration in the MCP server (Issue #16)."""
+"""Tests for HTTP Host, Origin, and CORS configuration."""
 
 from __future__ import annotations
 
-import ast
-import inspect
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 
-class TestCorsArgParsing:
-    """Verify the --cors-origins CLI argument is properly defined and parsed."""
+def _run_main(*arguments: str):
+    from crawler import mcp_server
 
-    def test_cors_origins_arg_exists_in_source(self) -> None:
-        """The argparse setup must include --cors-origins."""
-        source = Path("crawler/mcp_server.py").read_text()
-        assert "--cors-origins" in source
+    mock_mcp = MagicMock()
+    with (
+        patch.object(mcp_server, "mcp", mock_mcp),
+        patch.object(sys, "argv", ["crawl-mcp", *arguments]),
+    ):
+        mcp_server.main()
+    mock_mcp.run.assert_called_once()
+    return mock_mcp.run.call_args.kwargs
 
-    def test_cors_origins_default_is_none(self) -> None:
-        """Without --cors-origins the attribute should be None."""
-        from crawler.mcp_server import main
 
-        # Build the parser the same way main() does, but just parse empty args
-        import argparse
+class TestHttpAllowlistIntegration:
+    """Verify CLI allowlists are normalized at the FastMCP run boundary."""
 
-        source = inspect.getsource(main)
-        # Simpler: just invoke argparse directly
-        with patch("sys.argv", ["crawl-mcp", "--transport", "http"]):
-            parser = argparse.ArgumentParser()
-            parser.add_argument(
-                "--transport", choices=["stdio", "http"], default="stdio"
-            )
-            parser.add_argument("--host", default="127.0.0.1")
-            parser.add_argument("--port", type=int, default=8000)
-            parser.add_argument("--cors-origins", default=None)
-            args = parser.parse_args(["--transport", "http"])
-            assert args.cors_origins is None
+    def test_omitted_allowlists_preserve_fastmcp_defaults(self) -> None:
+        kwargs = _run_main("--transport", "http")
 
-    def test_cors_origins_single_value_parsed(self) -> None:
-        """A single origin should be parsed as-is."""
-        import argparse
+        assert kwargs["transport"] == "http"
+        assert "allowed_hosts" not in kwargs
+        assert "allowed_origins" not in kwargs
+        assert "middleware" not in kwargs
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--cors-origins", default=None)
-        args = parser.parse_args(["--cors-origins", "http://localhost:3000"])
-        assert args.cors_origins == "http://localhost:3000"
-
-    def test_cors_origins_multiple_values_parsed(self) -> None:
-        """Comma-separated origins should be stored as a single string."""
-        import argparse
-
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--cors-origins", default=None)
-        args = parser.parse_args(
-            ["--cors-origins", "http://localhost:3000,https://myapp.com"]
+    @pytest.mark.parametrize(
+        ("raw_hosts", "expected"),
+        [
+            ("mcp.example.com", ["mcp.example.com"]),
+            (
+                " mcp.example.com, mcp.internal.example ",
+                ["mcp.example.com", "mcp.internal.example"],
+            ),
+            ("mcp.example.com, ,mcp.internal.example,", ["mcp.example.com", "mcp.internal.example"]),
+            ("*", ["*"]),
+        ],
+    )
+    def test_allowed_hosts_are_normalized(self, raw_hosts, expected) -> None:
+        kwargs = _run_main(
+            "--transport", "http", "--allowed-hosts", raw_hosts
         )
-        assert args.cors_origins == "http://localhost:3000,https://myapp.com"
 
-    def test_cors_origins_wildcard_parsed(self) -> None:
-        """The wildcard '*' should be a valid value."""
-        import argparse
+        assert kwargs["allowed_hosts"] == expected
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--cors-origins", default=None)
-        args = parser.parse_args(["--cors-origins", "*"])
-        assert args.cors_origins == "*"
+    def test_effectively_empty_hosts_do_not_override_defaults(self) -> None:
+        kwargs = _run_main("--transport", "http", "--allowed-hosts", " , , ")
 
+        assert "allowed_hosts" not in kwargs
 
-class TestCorsMiddlewareConstruction:
-    """Verify CORS middleware is properly built from --cors-origins values."""
-
-    def test_middleware_built_for_single_origin(self) -> None:
-        """A single origin should produce a one-element Middleware list."""
-        from starlette.middleware import Middleware
+    @pytest.mark.parametrize(
+        ("raw_origins", "expected"),
+        [
+            ("http://localhost:3000", ["http://localhost:3000"]),
+            (
+                " http://localhost:3000, ,https://app.example.com ",
+                ["http://localhost:3000", "https://app.example.com"],
+            ),
+            ("*", ["*"]),
+        ],
+    )
+    def test_origins_reach_guard_and_cors_middleware(
+        self, raw_origins, expected
+    ) -> None:
         from starlette.middleware.cors import CORSMiddleware
 
-        cors_origins = "http://localhost:3000"
-        origins = [o.strip() for o in cors_origins.split(",")]
-        middleware = [
-            Middleware(
-                CORSMiddleware,
-                allow_origins=origins,
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-        ]
+        kwargs = _run_main(
+            "--transport", "http", "--cors-origins", raw_origins
+        )
+
+        assert kwargs["allowed_origins"] == expected
+        middleware = kwargs["middleware"]
         assert len(middleware) == 1
         assert middleware[0].cls is CORSMiddleware
-        assert middleware[0].kwargs["allow_origins"] == ["http://localhost:3000"]
+        assert middleware[0].kwargs == {
+            "allow_origins": expected,
+            "allow_credentials": True,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
 
-    def test_middleware_built_for_multiple_origins(self) -> None:
-        """Comma-separated origins should be split and trimmed."""
-        from starlette.middleware import Middleware
-        from starlette.middleware.cors import CORSMiddleware
+    def test_effectively_empty_origins_do_not_add_overrides(self) -> None:
+        kwargs = _run_main("--transport", "http", "--cors-origins", " , ")
 
-        cors_origins = "http://localhost:3000, https://myapp.com , https://other.com"
-        origins = [o.strip() for o in cors_origins.split(",")]
-        middleware = [
-            Middleware(
-                CORSMiddleware,
-                allow_origins=origins,
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-        ]
-        assert middleware[0].kwargs["allow_origins"] == [
-            "http://localhost:3000",
-            "https://myapp.com",
-            "https://other.com",
-        ]
+        assert "allowed_origins" not in kwargs
+        assert "middleware" not in kwargs
 
-    def test_middleware_built_for_wildcard(self) -> None:
-        """Wildcard '*' should produce allow_origins=['*']."""
-        from starlette.middleware import Middleware
-        from starlette.middleware.cors import CORSMiddleware
-
-        cors_origins = "*"
-        origins = [o.strip() for o in cors_origins.split(",")]
-        middleware = [
-            Middleware(
-                CORSMiddleware,
-                allow_origins=origins,
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-        ]
-        assert middleware[0].kwargs["allow_origins"] == ["*"]
-
-
-class TestCorsIntegration:
-    """Verify the main() function wires CORS middleware correctly."""
-
-    def test_no_cors_middleware_without_flag(self) -> None:
-        """When --cors-origins is not set, mcp.run should not receive middleware."""
+    def test_stdio_ignores_all_http_only_configuration(self) -> None:
         from crawler import mcp_server
 
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
+        kwargs = _run_main(
+            "--transport",
+            "stdio",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9000",
+            "--allowed-hosts",
+            "*",
+            "--cors-origins",
+            "*",
+        )
 
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch("sys.argv", ["crawl-mcp", "--transport", "http"]),
-        ):
-            mcp_server.main()
+        assert kwargs == {"transport": "stdio", "log_level": mcp_server.LOG_LEVEL_STR}
+        for key in ("host", "port", "allowed_hosts", "allowed_origins", "middleware"):
+            assert key not in kwargs
 
-        mock_mcp.run.assert_called_once()
-        call_kwargs = mock_mcp.run.call_args[1]
-        assert "middleware" not in call_kwargs
-        assert call_kwargs["transport"] == "http"
 
-    def test_cors_middleware_passed_with_flag(self) -> None:
-        """When --cors-origins is set, mcp.run should receive middleware."""
+class TestFastMcpHttpGuard:
+    """Exercise FastMCP's public ASGI Host/Origin guard."""
+
+    @staticmethod
+    def _request(app, *, host: str, origin: str | None = None):
+        from starlette.testclient import TestClient
+
+        headers = {"host": host}
+        if origin is not None:
+            headers["origin"] = origin
+        with TestClient(app) as client:
+            return client.get("/mcp", headers=headers)
+
+    def test_default_rejects_untrusted_public_host(self) -> None:
+        from fastmcp import FastMCP
+
+        app = FastMCP("guard-test").http_app(host_origin_protection=True)
+        response = self._request(app, host="public.example")
+        assert response.status_code == 421
+
+    def test_default_rejects_untrusted_origin(self) -> None:
+        from fastmcp import FastMCP
+
+        app = FastMCP("guard-test").http_app(host_origin_protection=True)
+        response = self._request(
+            app,
+            host="localhost",
+            origin="https://untrusted.example",
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.parametrize(
+        ("allowed_hosts", "allowed_origins", "host", "origin"),
+        [
+            (["mcp.example.com"], ["https://app.example.com"], "mcp.example.com", "https://app.example.com"),
+            (["*"], ["*"], "arbitrary.example", "https://arbitrary.example"),
+        ],
+    )
+    def test_explicit_allowlists_pass_the_guard(
+        self, allowed_hosts, allowed_origins, host, origin
+    ) -> None:
+        from fastmcp import FastMCP
+
+        app = FastMCP("guard-test").http_app(
+            host_origin_protection=True,
+            allowed_hosts=allowed_hosts,
+            allowed_origins=allowed_origins,
+        )
+        response = self._request(app, host=host, origin=origin)
+
+        # GET reaches normal MCP request validation (406), not either guard.
+        assert response.status_code == 406
+
+
+class TestTransportEncoding:
+    def test_stdio_invokes_encoding_configuration(self) -> None:
         from crawler import mcp_server
 
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
+        with patch.object(mcp_server, "_configure_stdio_encoding") as configure:
+            _run_main("--transport", "stdio")
+        configure.assert_called_once()
 
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch(
-                "sys.argv",
-                [
-                    "crawl-mcp",
-                    "--transport",
-                    "http",
-                    "--cors-origins",
-                    "http://localhost:3000",
-                ],
-            ),
-        ):
-            mcp_server.main()
-
-        mock_mcp.run.assert_called_once()
-        call_kwargs = mock_mcp.run.call_args[1]
-        assert "middleware" in call_kwargs
-        middleware_list = call_kwargs["middleware"]
-        assert len(middleware_list) == 1
-
-        from starlette.middleware.cors import CORSMiddleware
-
-        assert middleware_list[0].cls is CORSMiddleware
-        assert middleware_list[0].kwargs["allow_origins"] == ["http://localhost:3000"]
-
-    def test_cors_wildcard_passed_correctly(self) -> None:
-        """Wildcard origin should be passed through to middleware."""
+    def test_http_skips_encoding_configuration(self) -> None:
         from crawler import mcp_server
 
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
-
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch(
-                "sys.argv",
-                [
-                    "crawl-mcp",
-                    "--transport",
-                    "http",
-                    "--cors-origins",
-                    "*",
-                ],
-            ),
-        ):
-            mcp_server.main()
-
-        call_kwargs = mock_mcp.run.call_args[1]
-        assert call_kwargs["middleware"][0].kwargs["allow_origins"] == ["*"]
-
-    def test_cors_multiple_origins_split_correctly(self) -> None:
-        """Multiple comma-separated origins should all appear in the middleware."""
-        from crawler import mcp_server
-
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
-
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch(
-                "sys.argv",
-                [
-                    "crawl-mcp",
-                    "--transport",
-                    "http",
-                    "--cors-origins",
-                    "http://localhost:3000, https://myapp.com",
-                ],
-            ),
-        ):
-            mcp_server.main()
-
-        call_kwargs = mock_mcp.run.call_args[1]
-        origins = call_kwargs["middleware"][0].kwargs["allow_origins"]
-        assert origins == ["http://localhost:3000", "https://myapp.com"]
-
-    def test_stdio_transport_ignores_cors(self) -> None:
-        """STDIO transport should not include CORS middleware even if flag is set."""
-        from crawler import mcp_server
-
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
-
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch(
-                "sys.argv",
-                [
-                    "crawl-mcp",
-                    "--transport",
-                    "stdio",
-                    "--cors-origins",
-                    "http://localhost:3000",
-                ],
-            ),
-        ):
-            mcp_server.main()
-
-        mock_mcp.run.assert_called_once()
-        call_kwargs = mock_mcp.run.call_args[1]
-        # STDIO transport should just get transport="stdio", no middleware
-        assert call_kwargs == {"transport": "stdio"}
-
-    def test_stdio_transport_invokes_encoding_configuration(self) -> None:
-        """STDIO transport should enable UTF-8 stdio configuration."""
-        from crawler import mcp_server
-
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
-
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch.object(mcp_server, "_configure_stdio_encoding") as mock_configure,
-            patch("sys.argv", ["crawl-mcp", "--transport", "stdio"]),
-        ):
-            mcp_server.main()
-
-        mock_configure.assert_called_once()
-
-    def test_http_transport_skips_encoding_configuration(self) -> None:
-        """HTTP transport should not configure stdio encoding."""
-        from crawler import mcp_server
-
-        mock_mcp = MagicMock()
-        mock_mcp.run = MagicMock()
-
-        with (
-            patch.object(mcp_server, "mcp", mock_mcp),
-            patch.object(mcp_server, "_configure_stdio_encoding") as mock_configure,
-            patch("sys.argv", ["crawl-mcp", "--transport", "http"]),
-        ):
-            mcp_server.main()
-
-        mock_configure.assert_not_called()
+        with patch.object(mcp_server, "_configure_stdio_encoding") as configure:
+            _run_main("--transport", "http")
+        configure.assert_not_called()

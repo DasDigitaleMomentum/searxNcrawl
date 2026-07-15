@@ -117,6 +117,15 @@ def _configure_stdio_encoding() -> None:
         pass
 
 
+def _parse_csv_allowlist(value: Optional[str]) -> Optional[List[str]]:
+    """Normalize a comma-separated HTTP allowlist without adding defaults."""
+    if value is None:
+        return None
+
+    entries = [entry.strip() for entry in value.split(",") if entry.strip()]
+    return entries or None
+
+
 def _format_timestamp() -> str:
     """Get current timestamp in ISO format."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -670,6 +679,15 @@ Examples:
         help="Port to bind to for HTTP transport (default: 8000)",
     )
     parser.add_argument(
+        "--allowed-hosts",
+        default=None,
+        help=(
+            "Comma-separated Host headers allowed for HTTP transport. "
+            "This is separate from the bind address. "
+            'Use "*" only to explicitly allow every Host.'
+        ),
+    )
+    parser.add_argument(
         "--cors-origins",
         default=None,
         help=(
@@ -701,12 +719,18 @@ Examples:
             "port": args.port,
         }
 
-        if args.cors_origins:
+        allowed_hosts = _parse_csv_allowlist(args.allowed_hosts)
+        if allowed_hosts is not None:
+            LOGGER.info("Allowing HTTP Host headers: %s", allowed_hosts)
+            run_kwargs["allowed_hosts"] = allowed_hosts
+
+        origins = _parse_csv_allowlist(args.cors_origins)
+        if origins is not None:
             from starlette.middleware import Middleware
             from starlette.middleware.cors import CORSMiddleware
 
-            origins = [o.strip() for o in args.cors_origins.split(",")]
             LOGGER.info("CORS enabled for origins: %s", origins)
+            run_kwargs["allowed_origins"] = origins
             run_kwargs["middleware"] = [
                 Middleware(
                     CORSMiddleware,

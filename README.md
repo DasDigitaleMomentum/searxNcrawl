@@ -93,8 +93,9 @@ docker compose up --build
 
 | Variable    | Default                   | Description                                                   |
 | ----------- | ------------------------- | ------------------------------------------------------------- |
-| `MCP_PORT`  | `9555`                    | MCP server HTTP port                                          |
-| `LOG_LEVEL` | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `MCP_PORT`                  | `9555`                    | MCP server HTTP port                                          |
+| `LOG_LEVEL`                 | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `FASTMCP_HTTP_ALLOWED_HOSTS` | (FastMCP secure defaults) | JSON list of trusted HTTP Host headers, for example `["mcp.example.com"]` |
 
 The MCP server is available at `http://localhost:9555/mcp`.
 
@@ -156,8 +157,11 @@ python -m crawler.mcp_server
 # HTTP transport
 python -m crawler.mcp_server --transport http --port 8000
 
+# HTTP exposed through a specific public hostname
+python -m crawler.mcp_server --transport http --host 0.0.0.0 --allowed-hosts "mcp.example.com"
+
 # HTTP with CORS
-python -m crawler.mcp_server --transport http --cors-origins "http://localhost:3000"
+python -m crawler.mcp_server --transport http --allowed-hosts "mcp.example.com" --cors-origins "https://app.example.com"
 
 # Docker (HTTP only)
 docker compose up --build
@@ -208,14 +212,33 @@ docker compose up --build
 
 #### CORS
 
-HTTP transport can emit CORS headers for browser-based MCP clients:
+FastMCP validates the HTTP `Host` header independently of the address on which
+the server listens. For remote access, allow the exact externally visible Host
+header with a comma-separated CLI value:
+
+```bash
+crawl-mcp --transport http --host 0.0.0.0 --allowed-hosts "mcp.example.com,mcp.internal.example"
+```
+
+Alternatively, use FastMCP's environment setting. It uses JSON-list syntax:
+
+```bash
+FASTMCP_HTTP_ALLOWED_HOSTS='["mcp.example.com"]' crawl-mcp --transport http --host 0.0.0.0
+```
+
+Browser Origin validation and CORS response headers are separate from Host
+validation. `--cors-origins` configures both FastMCP's Origin guard and the CORS
+middleware using the same normalized, comma-separated values:
 
 ```bash
 crawl-mcp --transport http --cors-origins "http://localhost:3000,https://myapp.com"
 crawl-mcp --transport http --cors-origins "*"   # all origins — local dev only
 ```
 
-Without `--cors-origins`, no CORS headers are sent (browsers will block cross-origin requests).
+Omitting either allowlist preserves FastMCP's secure defaults (and permits the
+upstream environment setting to apply). A value of `*` for Hosts or Origins is
+an explicit opt-in to broad access and should only be used when that security
+trade-off is intentional. Without `--cors-origins`, no CORS headers are sent.
 
 ### CLI Tools
 
@@ -291,7 +314,7 @@ doc = await crawl_page_async("https://example.com", config=config)
 
 - `crawl4ai>=0.7.4` — crawler engine
 - `playwright>=1.40.0` — browser automation
-- `fastmcp>=2.0.0` — MCP server framework
+- `fastmcp>=3.4.3` — MCP server framework
 - `httpx>=0.27.0` — HTTP client for SearXNG
 - `tldextract>=5.1.2` — domain parsing for site crawls
 

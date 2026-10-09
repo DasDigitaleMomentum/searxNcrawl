@@ -1,0 +1,45 @@
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.toml]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.json]
+indent_style = space
+indent_size = 2
+
+[*.md]
+indent_style = space
+trim_trailing_whitespace = false
+
+[Dockerfile]
+indent_style = space
+indent_size = 4
+
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# Existing files that intentionally or historically deviate from the defaults.
+# tests/test_markdown_dedup.py: trailing spaces inside a string literal are test input.
+[{tests/test_markdown_dedup.py,scripts/test-extended.sh}]
+trim_trailing_whitespace = false
+
+# Captured crawl output, stored verbatim without a final newline.
+[plans/**.json]
+insert_final_newline = false

@@ -4409,7 +4409,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "crawl4ai", specifier = ">=0.7.4" },
+    { name = "crawl4ai", specifier = ">=0.8.5" },
     { name = "fastmcp", specifier = ">=3.4.3" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "playwright", specifier = ">=1.40.0" },

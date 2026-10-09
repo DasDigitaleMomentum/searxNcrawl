@@ -58,7 +58,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev
 
+      - name: Install Chromium for browser tests
+        run: uv run --locked --extra dev playwright install --with-deps chromium
+
       - name: Run tests
+        env:
+          SEARXNCRAWL_REQUIRE_BROWSER_TESTS: "1"
         run: uv run --locked --extra dev pytest -p no:cacheprovider
 
   ci:

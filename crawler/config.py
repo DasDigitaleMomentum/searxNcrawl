@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -29,6 +30,39 @@ MAIN_SELECTORS: List[str] = [
     "[data-docs-content]",
     "[data-content]",
 ]
+
+# Minimum visible text length for a main-content area to count as rendered.
+MIN_CONTENT_CHARS = 50
+
+# How long to keep waiting for a main-content area before falling back to the
+# page body. Covers client-side rendered pages that fill <main> after load,
+# without stalling pages that have no such area (e.g. example.com) until the
+# page timeout.
+CONTENT_WAIT_GRACE_MS = 3000
+
+
+def build_content_wait_condition() -> str:
+    """Return the ``wait_for`` JS condition used for single-page crawls.
+
+    The condition becomes true as soon as any element matching
+    ``MAIN_SELECTORS`` contains more than ``MIN_CONTENT_CHARS`` characters of
+    text. If no such element appears, it becomes true once the document has
+    finished loading, ``CONTENT_WAIT_GRACE_MS`` have passed and the body has
+    any text. Crawl4AI polls the condition until it returns true or
+    ``page_timeout`` expires.
+    """
+    selector = json.dumps(", ".join(MAIN_SELECTORS))
+    return f"""js:() => {{
+        const areas = document.querySelectorAll({selector});
+        for (const area of areas) {{
+            if ((area.innerText || "").trim().length > {MIN_CONTENT_CHARS}) return true;
+        }}
+        if (document.readyState !== "complete" || !document.body) return false;
+        window.__searxncrawlWaitStart = window.__searxncrawlWaitStart || Date.now();
+        if (Date.now() - window.__searxncrawlWaitStart < {CONTENT_WAIT_GRACE_MS}) return false;
+        return document.body.innerText.trim().length > 0;
+    }}"""
+
 
 # Selectors for elements to exclude (navigation, footers, sidebars, cookie banners)
 EXCLUDED_SELECTORS: List[str] = [
@@ -176,7 +210,7 @@ def build_markdown_run_config(
             window.location.reload();
             setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 500);
         """,
-        wait_for="js:() => document.querySelector('main') && document.querySelector('main').innerText.trim().length > 50",
+        wait_for=build_content_wait_condition(),
     )
     if overrides:
         _apply_overrides(config, overrides)

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playwright's Chromium is installed automatically once per process before the first browser launch if it is missing (`python -m playwright install chromium`, idempotent; output goes to stderr so MCP stdio stays clean). Disable with `PLAYWRIGHT_AUTO_INSTALL=false`. (refs #14)
 - `searxncrawl` console script as an alias for `crawl-mcp`, so the package name doubles as the MCP server command.
 
+### Fixed
+- Single-page crawls no longer time out on pages without a `<main>` element (e.g. example.com). The `wait_for` condition now accepts any `MAIN_SELECTORS` area (`article`, `[role='main']`, `.markdown-body`, …) with more than 50 characters and falls back to the page body after a 3 s grace period once the document has loaded, instead of waiting for the 30 s page timeout.
+
 ## [0.30.0] - 2026-07-15
 
 ### Added

@@ -41,5 +41,3 @@ indent_size = 2
 trim_trailing_whitespace = false
 
 # Captured crawl output, stored verbatim without a final newline.
-[plans/**.json]
-insert_final_newline = false

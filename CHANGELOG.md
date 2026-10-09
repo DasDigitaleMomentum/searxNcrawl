@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `searxncrawl` console script as an alias for `crawl-mcp`, so the package name doubles as the MCP server command.
 
 ### Fixed
+- Pages could be captured mid-reload: the default config ran `window.location.reload()` in `js_code`, which Crawl4AI executes after `wait_for` without waiting for the new document. On docs.python.org this returned only `<head>` and failed as "Blocked by anti-bot protection". The reload now runs as a Playwright `after_goto` hook (`page.reload(wait_until="load")`), so `wait_for` and capture see the reloaded page. Custom configs and `js_code` overrides keep their previous behaviour (no reload).
+- Content rendered into shadow DOM (e.g. MDN code examples) was missing from the markdown; `flatten_shadow_dom` is now enabled. Raises the minimum Crawl4AI version to 0.8.5, the first release with this option.
 - Single-page crawls no longer time out on pages without a `<main>` element (e.g. example.com). The `wait_for` condition now accepts any `MAIN_SELECTORS` area (`article`, `[role='main']`, `.markdown-body`, …) with more than 50 characters and falls back to the page body after a 3 s grace period once the document has loaded, instead of waiting for the 30 s page timeout.
 
 ## [0.30.0] - 2026-07-15

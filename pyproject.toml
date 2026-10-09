@@ -12,6 +12,35 @@ dependencies = [
     "httpx>=0.27.0",
     "python-dotenv>=1.0.1",
 ]
+license = "MIT"
+authors = [{ name = "DDM – Das Digitale Momentum GmbH & Co KG" }]
+keywords = [
+    "mcp",
+    "mcp-server",
+    "searxng",
+    "crawl4ai",
+    "web-crawler",
+    "web-search",
+    "markdown",
+    "llm-tools",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+[project.urls]
+Homepage = "https://www.das-digitale-momentum.de/en/open-source/#searxncrawl"
+Repository = "https://github.com/DasDigitaleMomentum/searxNcrawl"
+Issues = "https://github.com/DasDigitaleMomentum/searxNcrawl/issues"
+Changelog = "https://github.com/DasDigitaleMomentum/searxNcrawl/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -34,9 +63,18 @@ where = ["."]
 include = ["crawler*"]
 
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# Narrowed to ruff's classic baseline (pycodestyle E4/E7/E9 + Pyflakes) so the
+# existing code passes unchanged. Re-enable E402/F401 once the findings are fixed.
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E402", "F401"]

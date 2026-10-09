@@ -61,3 +61,7 @@ playwright/.cache/
 
 # Local scratch outputs
 tmp/
+
+# Private working artifacts (agent plans, reviews, session notes); keep local only
+/plans/
+/docs/reviews/

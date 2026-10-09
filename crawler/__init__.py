@@ -48,6 +48,7 @@ from .auth import AuthConfig, AuthInput, resolve_auth
 from .config import RunConfigOverrides, build_markdown_run_config
 from .document import CrawledDocument, Reference
 from .session_capture import CaptureResult, capture_session, capture_session_async
+from .browser_setup import ensure_chromium
 from .site import SiteCrawlResult, crawl_site_async as _crawl_site_async
 
 __all__ = [
@@ -127,6 +128,8 @@ async def crawl_page_async(
         if resolved_auth and resolved_auth.storage_state
         else None
     )
+
+    await ensure_chromium()
 
     try:
         if browser_cfg is None:

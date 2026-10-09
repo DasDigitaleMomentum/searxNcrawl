@@ -10,6 +10,8 @@ from pathlib import Path
 from time import monotonic
 from typing import Any, Awaitable, Callable, Literal, Optional
 
+from .browser_setup import ensure_chromium
+
 CaptureStatus = Literal["success", "timeout", "abort"]
 
 
@@ -225,6 +227,8 @@ async def _execute_capture_flow(
 
     pattern = re.compile(completion_url_pattern)
     started = monotonic()
+
+    await ensure_chromium()
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=headless)

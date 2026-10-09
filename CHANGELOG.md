@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Zero-setup runs with `uvx`: `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl` starts the MCP server without a clone or virtualenv. (refs #14)
+- Playwright's Chromium is installed automatically once per process before the first browser launch if it is missing (`python -m playwright install chromium`, idempotent; output goes to stderr so MCP stdio stays clean). Disable with `PLAYWRIGHT_AUTO_INSTALL=false`. (refs #14)
+- `searxncrawl` console script as an alias for `crawl-mcp`, so the package name doubles as the MCP server command.
+
 ## [0.30.0] - 2026-07-15
 
 ### Added

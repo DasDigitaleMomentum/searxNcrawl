@@ -19,6 +19,14 @@ docker compose up --build
 
 ➜ MCP server at `http://localhost:9555/mcp`
 
+### uvx (no clone)
+
+Run the MCP server straight from GitHub, no clone or virtualenv. Chromium is downloaded automatically on the first crawl.
+
+```bash
+SEARXNG_URL=http://your-searxng:8888 uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl
+```
+
 ### pip (standalone)
 
 CLI tools, Python API, and MCP server. SearXNG required for search.
@@ -95,6 +103,7 @@ docker compose up --build
 | ----------- | ------------------------- | ------------------------------------------------------------- |
 | `MCP_PORT`                  | `9555`                    | MCP server HTTP port                                          |
 | `LOG_LEVEL`                 | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `PLAYWRIGHT_AUTO_INSTALL`   | `true`                    | Download Playwright's Chromium automatically before the first browser launch if it is missing. Set to `false` where browsers are provisioned separately |
 | `FASTMCP_HTTP_ALLOWED_HOSTS` | (FastMCP secure defaults) | JSON list of trusted HTTP Host headers, for example `["mcp.example.com"]` |
 
 The MCP server is available at `http://localhost:9555/mcp`.
@@ -168,6 +177,22 @@ docker compose up --build
 ```
 
 #### MCP client configuration
+
+**With uvx (no clone, no venv):**
+
+```json
+{
+  "mcpServers": {
+    "crawler": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/DasDigitaleMomentum/searxNcrawl", "searxncrawl"],
+      "env": { "SEARXNG_URL": "http://your-searxng:8888" }
+    }
+  }
+}
+```
+
+The first crawl downloads Playwright's Chromium once (about 550 MB on disk); later starts reuse it. On Linux hosts without the browser's system libraries, run `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl playwright install --with-deps chromium` once.
 
 **Python with venv:**
 

@@ -60,3 +60,21 @@ jobs:
 
       - name: Run tests
         run: uv run --locked --extra dev pytest -p no:cacheprovider
+
+  ci:
+    # Single required status check, enforced by the org ruleset
+    # "public-default-branch". Add every job of this workflow to `needs`.
+    name: ci
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless all jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = "success" ] || exit 1
+          done

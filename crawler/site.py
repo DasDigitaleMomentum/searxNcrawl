@@ -16,6 +16,7 @@ from crawl4ai.deep_crawling.bfs_strategy import FilterChain
 from crawl4ai.deep_crawling.dfs_strategy import DFSDeepCrawlStrategy
 from crawl4ai.deep_crawling.filters import DomainFilter
 
+from .browser_setup import ensure_chromium
 from .builder import build_document_from_result
 from .auth import AuthInput, resolve_auth
 from .config import build_markdown_run_config
@@ -134,6 +135,7 @@ async def crawl_site_async(
         storage_state=resolved_auth.storage_state if resolved_auth else None,
     )
 
+    await ensure_chromium()
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         try:
             crawl_result = await asyncio.wait_for(

@@ -4,6 +4,8 @@ MCP server and CLI toolkit for web search and crawling, built on [Crawl4AI](http
 
 Published at [github.com/DasDigitaleMomentum/searxNcrawl](https://github.com/DasDigitaleMomentum/searxNcrawl) — maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. Successor to `searxng-mcp`.
 
+<!-- mcp-name: io.github.DasDigitaleMomentum/searxncrawl -->
+
 ## Quick Start
 
 Pick your setup:
@@ -21,11 +23,13 @@ docker compose up --build
 
 ### uvx (no clone)
 
-Run the MCP server straight from GitHub, no clone or virtualenv. Chromium is downloaded automatically on the first crawl.
+Run the MCP server from [PyPI](https://pypi.org/project/searxncrawl/), no clone or virtualenv. Chromium is downloaded automatically on the first crawl.
 
 ```bash
-SEARXNG_URL=http://your-searxng:8888 uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl
+SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
 ```
+
+The latest development version runs straight from GitHub with `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl`.
 
 ### pip (standalone)
 
@@ -185,14 +189,14 @@ docker compose up --build
   "mcpServers": {
     "crawler": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/DasDigitaleMomentum/searxNcrawl", "searxncrawl"],
+      "args": ["searxncrawl"],
       "env": { "SEARXNG_URL": "http://your-searxng:8888" }
     }
   }
 }
 ```
 
-The first crawl downloads Playwright's Chromium once (about 550 MB on disk); later starts reuse it. On Linux hosts without the browser's system libraries, run `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl playwright install --with-deps chromium` once.
+The first crawl downloads Playwright's Chromium once (about 550 MB on disk); later starts reuse it. On Linux hosts without the browser's system libraries, run `uvx --from searxncrawl playwright install --with-deps chromium` once.
 
 **Python with venv:**
 

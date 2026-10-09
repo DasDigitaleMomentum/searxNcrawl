@@ -321,3 +321,7 @@ doc = await crawl_page_async("https://example.com", config=config)
 ## License
 
 MIT — © 2026 DDM – Das Digitale Momentum GmbH & Co KG
+
+---
+
+Maintained by [Das Digitale Momentum](https://www.das-digitale-momentum.de/en/open-source/#searxncrawl) · Much, Germany · [All our open source projects](https://github.com/DasDigitaleMomentum)

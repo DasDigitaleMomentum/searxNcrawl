@@ -53,6 +53,7 @@ crawl = "crawler.cli:main"
 crawl-capture = "crawler.cli:capture_main"
 search = "crawler.cli:search_main"
 crawl-mcp = "crawler.mcp_server:main"
+searxncrawl = "crawler.mcp_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "."}

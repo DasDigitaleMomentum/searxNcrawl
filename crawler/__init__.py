@@ -45,10 +45,15 @@ from crawl4ai.models import CrawlResult, CrawlResultContainer
 
 from .builder import build_document_from_result
 from .auth import AuthConfig, AuthInput, resolve_auth
-from .config import RunConfigOverrides, build_markdown_run_config
+from .config import (
+    RunConfigOverrides,
+    build_markdown_run_config,
+    wants_page_reload,
+)
 from .document import CrawledDocument, Reference
 from .session_capture import CaptureResult, capture_session, capture_session_async
 from .browser_setup import ensure_chromium
+from .page_hooks import install_reload_hook
 from .site import SiteCrawlResult, crawl_site_async as _crawl_site_async
 
 __all__ = [
@@ -134,12 +139,16 @@ async def crawl_page_async(
     try:
         if browser_cfg is None:
             async with AsyncWebCrawler() as crawler:
+                if wants_page_reload(run_config):
+                    install_reload_hook(crawler)
                 container = await asyncio.wait_for(
                     crawler.arun(url=url, config=run_config),
                     timeout=effective_timeout,
                 )
         else:
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
+                if wants_page_reload(run_config):
+                    install_reload_hook(crawler)
                 container = await asyncio.wait_for(
                     crawler.arun(url=url, config=run_config),
                     timeout=effective_timeout,

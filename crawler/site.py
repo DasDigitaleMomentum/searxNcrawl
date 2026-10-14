@@ -18,8 +18,9 @@ from crawl4ai.deep_crawling.filters import DomainFilter
 
 from .browser_setup import ensure_chromium
 from .builder import build_document_from_result
+from .page_hooks import install_reload_hook
 from .auth import AuthInput, resolve_auth
-from .config import build_markdown_run_config
+from .config import build_markdown_run_config, wants_page_reload
 from .document import CrawledDocument
 
 LOGGER = logging.getLogger(__name__)
@@ -137,6 +138,8 @@ async def crawl_site_async(
 
     await ensure_chromium()
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        if wants_page_reload(config):
+            install_reload_hook(crawler)
         try:
             crawl_result = await asyncio.wait_for(
                 crawler.arun(url=seed_url, config=config),

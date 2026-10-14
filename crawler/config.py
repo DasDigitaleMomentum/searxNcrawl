@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import weakref
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -62,6 +63,18 @@ def build_content_wait_condition() -> str:
         if (Date.now() - window.__searxncrawlWaitStart < {CONTENT_WAIT_GRACE_MS}) return false;
         return document.body.innerText.trim().length > 0;
     }}"""
+
+
+# Run configs that should reload each page once before capture (see
+# crawler.page_hooks). Tracked by identity so custom configs keep their
+# behaviour.
+_RELOAD_CONFIGS: "weakref.WeakSet[CrawlerRunConfig]" = weakref.WeakSet()
+
+
+def wants_page_reload(config: CrawlerRunConfig) -> bool:
+    """Return whether ``config`` came from :func:`build_markdown_run_config`
+    without a custom ``js_code`` override, i.e. should reload pages once."""
+    return config in _RELOAD_CONFIGS
 
 
 # Selectors for elements to exclude (navigation, footers, sidebars, cookie banners)
@@ -206,14 +219,18 @@ def build_markdown_run_config(
         markdown_generator=generator,
         cache_mode=CacheMode.BYPASS,
         scan_full_page=True,
-        js_code="""
-            window.location.reload();
-            setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 500);
-        """,
+        # The page reload that used to live here runs as a Playwright hook now
+        # (crawler.page_hooks), so it completes before wait_for and capture.
+        js_code="window.scrollTo(0, document.body.scrollHeight);",
+        # Read content that sites render into shadow roots (e.g. MDN code
+        # examples); without it those blocks are missing from the markdown.
+        flatten_shadow_dom=True,
         wait_for=build_content_wait_condition(),
     )
     if overrides:
         _apply_overrides(config, overrides)
+    if not (overrides and overrides.js_code):
+        _RELOAD_CONFIGS.add(config)
     return config
 
 

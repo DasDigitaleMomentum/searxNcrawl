@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -889,7 +890,7 @@ async def test_cli_single_attempt_on_read_timeout(
         monkeypatch,
         route=lambda url: (
             _read_timeout()
-            if url.startswith("https://searx.test")
+            if urlsplit(url).hostname == "searx.test"
             else _response(json={"results": {"web": _web(2)}})
         ),
     )

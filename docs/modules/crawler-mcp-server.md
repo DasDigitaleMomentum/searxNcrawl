@@ -27,7 +27,7 @@ version: 1.1
 | `crawler-package-api` | module | Calls async crawl and site-crawl APIs from tool handlers (`crawler/mcp_server.py:288`, `crawler/mcp_server.py:303`, `crawler/mcp_server.py:383`). |
 | `crawler-document-pipeline` | module | Uses `CrawledDocument` type and serialization support (`crawler/mcp_server.py:44`). |
 | `fastmcp.FastMCP` | library | MCP framework for declaring tools and running the server; version 3.4.3 or newer supplies the HTTP Host/Origin protection controls used here (`pyproject.toml:11`, `crawler/mcp_server.py:42`, `crawler/mcp_server.py:82`). |
-| `httpx` | library | SearXNG HTTP client for search tool (`crawler/mcp_server.py:41`, `crawler/mcp_server.py:463`). |
+| `crawler.search_orchestrator` | module | Multi-provider search (SearXNG, You.com), result serializer and configured-provider list for the startup log (`crawler/mcp_server.py:44`, `crawler/mcp_server.py:47`). |
 | `starlette` | library | CORS middleware for HTTP transport (`CORSMiddleware`), transitive dependency of FastMCP. |
 | `python-dotenv` | library | Transitively used via shared `crawler.env` config loader (`crawler/env.py`). |
 
@@ -52,15 +52,14 @@ version: 1.1
 | `_format_output` | function | internal | `crawler/mcp_server.py:194` | Central formatter for markdown/json outputs plus summary/stats. |
 | `crawl` | function | public | `crawler/mcp_server.py:233` | MCP tool for crawling one or more URLs. |
 | `crawl_site` | function | public | `crawler/mcp_server.py:318` | MCP tool for BFS site crawl from seed URL. |
-| `_get_searxng_client` | function | internal | `crawler/mcp_server.py:463` | Builds configured async HTTP client with optional auth. |
-| `search` | function | public | `crawler/mcp_server.py:481` | MCP tool for SearXNG metasearch with filters and result limits. |
+| `search` | function | public | `crawler/mcp_server.py:430` | MCP tool for multi-provider search (`providers` subset, `max_retries` per provider); returns the serialized envelope or `{"error", "query"}` JSON. |
 | `main` | function | public | `crawler/mcp_server.py:633` | Process entrypoint selecting stdio/http transport and conditionally wiring HTTP Host/Origin allowlists and CORS middleware. |
 
 ## Data Flow
 
 1. MCP client invokes a tool via FastMCP transport.
 2. Tool validates/normalizes arguments (e.g., output format).
-3. Tool calls package crawl/search functions or SearXNG HTTP API.
+3. Tool calls package crawl functions or `crawler.search_orchestrator.search`.
 4. Results are transformed to markdown or JSON string payload.
 5. FastMCP returns payload to client over stdio/HTTP.
 
@@ -71,8 +70,7 @@ version: 1.1
   2. `~/.config/searxncrawl/.env` (user config directory)
   3. Auto-creates from `.env.example` if available
 - Env vars consumed:
-  - `SEARXNG_URL` (`crawler/mcp_server.py:54`)
-  - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/mcp_server.py:55`-`crawler/mcp_server.py:56`)
+  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`. The startup log lists the configured providers without secrets.
 - Runtime CLI args for server process:
   - `--transport` (`stdio`/`http`) (`crawler/mcp_server.py:664`)
   - `--host` and `--port` select the HTTP bind address and port; they do not trust an externally visible Host header (`crawler/mcp_server.py:670`, `crawler/mcp_server.py:675`).

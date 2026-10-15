@@ -6,19 +6,18 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import httpx
-
-from .env import load_config, searxng_extra_headers
+from .env import load_config
 
 load_config()
 
+from . import search_orchestrator
 from .document import CrawledDocument
+from .search_orchestrator import SearchProviderError, serialize_search_results
 from .session_capture import (
     CdpSessionEntry,
     capture_session_async,
@@ -55,6 +54,7 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
 
     ## 1. Python Tutorial - W3Schools
     https://www.w3schools.com/python/
+    **Sources:** searxng, youcom
 
     Well organized tutorials with examples...
 
@@ -72,9 +72,12 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
         title = result.get("title", "Untitled")
         url = result.get("url", "")
         content = result.get("content", "")
+        providers = result.get("providers")
 
         lines.append(f"## {i}. {title}")
         lines.append(url)
+        if providers:
+            lines.append(f"**Sources:** {', '.join(providers)}")
         lines.append("")
         if content:
             lines.append(content)
@@ -82,49 +85,7 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
         lines.append("---")
         lines.append("")
 
-    # Add suggestions if available
-    suggestions = data.get("suggestions", [])
-    if suggestions:
-        lines.append("**Related searches:** " + ", ".join(suggestions[:5]))
-        lines.append("")
-
     return "\n".join(lines)
-
-
-def _parse_search_result_fields() -> Optional[List[str]]:
-    """Parse SEARCH_RESULT_FIELDS env var; empty/unset means all-fields mode."""
-    raw_fields = os.getenv("SEARCH_RESULT_FIELDS")
-    if raw_fields is None:
-        return None
-
-    fields = [field.strip() for field in raw_fields.split(",") if field.strip()]
-    if not fields:
-        return None
-
-    return fields
-
-
-def _filter_search_results(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter result fields and envelope based on SEARCH_RESULT_FIELDS."""
-    fields = _parse_search_result_fields()
-    if fields is None:
-        return data
-
-    field_set = set(fields)
-    raw_results = data.get("results")
-    results: List[Dict[str, Any]] = []
-
-    if isinstance(raw_results, list):
-        for item in raw_results:
-            if isinstance(item, dict):
-                filtered_item = {k: v for k, v in item.items() if k in field_set}
-                results.append(filtered_item)
-
-    return {
-        "query": data.get("query", ""),
-        "number_of_results": len(results),
-        "results": results,
-    }
 
 
 def _doc_to_dict(doc: CrawledDocument) -> dict:
@@ -772,7 +733,7 @@ def capture_main(argv: Optional[List[str]] = None) -> int:
 def _parse_search_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="search",
-        description="Search the web using SearXNG metasearch engine.",
+        description="Search the web using the configured providers (SearXNG, You.com).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -784,6 +745,9 @@ Examples:
 
   # Search with time filter
   search "latest AI news" --time-range week
+
+  # Only one provider
+  search "python tutorials" --providers searxng
 
   # JSON output
   search "python" --json
@@ -815,14 +779,14 @@ Examples:
         type=str,
         nargs="+",
         default=None,
-        help="Categories to search (e.g., general, images, news)",
+        help="Categories to search (e.g., general, images, news) (SearXNG only)",
     )
     parser.add_argument(
         "--engines",
         type=str,
         nargs="+",
         default=None,
-        help="Specific search engines to use",
+        help="Specific search engines to use (SearXNG only)",
     )
     parser.add_argument(
         "--safesearch",
@@ -836,6 +800,15 @@ Examples:
         type=int,
         default=10,
         help="Maximum results to return (default: 10)",
+    )
+    parser.add_argument(
+        "--providers",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated subset of configured providers to query "
+            "(searxng,youcom; default: all configured)"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -862,60 +835,23 @@ Examples:
 
 async def _run_search_async(args: argparse.Namespace) -> int:
     """Main async entry point for search."""
-    searxng_url = os.getenv("SEARXNG_URL", "http://localhost:8888")
-    searxng_username = os.getenv("SEARXNG_USERNAME")
-    searxng_password = os.getenv("SEARXNG_PASSWORD")
-
     logging.info("Searching for: %s", args.query)
 
-    # Build search parameters
-    params: Dict[str, Any] = {
-        "q": args.query,
-        "format": "json",
-        "language": args.language,
-        "safesearch": args.safesearch,
-    }
-
-    if args.time_range:
-        params["time_range"] = args.time_range
-
-    if args.categories:
-        params["categories"] = ",".join(args.categories)
-
-    if args.engines:
-        params["engines"] = ",".join(args.engines)
-
-    # Create HTTP client
-    auth = None
-    if searxng_username and searxng_password:
-        auth = httpx.BasicAuth(searxng_username, searxng_password)
-
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
-    headers.update(searxng_extra_headers())
-
     try:
-        async with httpx.AsyncClient(
-            base_url=searxng_url,
-            auth=auth,
-            headers=headers,
-            timeout=30.0,
-        ) as client:
-            response = await client.get("/search", params=params)
-            response.raise_for_status()
-            data = response.json()
+        results = await search_orchestrator.search(
+            args.query,
+            language=args.language,
+            time_range=args.time_range,
+            categories=args.categories,
+            engines=args.engines,
+            safesearch=args.safesearch,
+            max_results=args.max_results,
+            max_retries=1,
+            providers=args.providers,
+        )
+        data = serialize_search_results(args.query, results)
 
-        # Limit results
-        max_results = min(max(1, args.max_results), 50)
-        if "results" in data:
-            data["results"] = data["results"][:max_results]
-            data["number_of_results"] = len(data["results"])
-
-        data = _filter_search_results(data)
-
-        logging.info("Found %d results", data.get("number_of_results", 0))
+        logging.info("Found %d results", data["number_of_results"])
 
         # Format output
         if args.json_output:
@@ -933,21 +869,8 @@ async def _run_search_async(args: argparse.Namespace) -> int:
 
         return 0
 
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 401:
-            logging.error(
-                "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
-            )
-        else:
-            logging.error(
-                "SearXNG API error: %d - %s",
-                exc.response.status_code,
-                exc.response.text,
-            )
-        return 1
-
-    except httpx.RequestError as exc:
-        logging.error("Request failed: %s", exc)
+    except SearchProviderError as exc:
+        logging.error("Search failed: %s", exc)
         return 1
 
     except Exception as exc:

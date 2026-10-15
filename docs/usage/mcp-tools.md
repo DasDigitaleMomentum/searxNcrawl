@@ -11,7 +11,7 @@ Crawl one or more web pages and extract their content.
 | `urls`         | `List[str]` | required     | URLs to crawl                                       |
 | `output_format` | `str`       | `"markdown"` | `"markdown"` or `"json"`                              |
 | `concurrency`  | `int`       | `3`          | Max concurrent crawls                               |
-| `timeout`      | `int`       | `30`         | Per-URL timeout in seconds (≥ 1)                  |
+| `timeout`      | `int`       | `15`         | Per-URL timeout in seconds (≥ 1)                  |
 | `remove_links` | `bool`      | `false`      | Remove all links from markdown output               |
 | `dedup_mode`   | `str`       | `"exact"`    | `"exact"` or `"off"`                                  |
 | `storage_state` | `str`       | `null`       | Path to Playwright storage state JSON for auth      |
@@ -81,21 +81,22 @@ crawl_site(url="https://docs.example.com", storage_state="/path/to/state.json")
 
 ## `search`
 
-Search the web using SearXNG metasearch engine.
+Search the web via the configured providers (SearXNG and/or You.com). All configured providers are queried in parallel; results are merged (URL dedup, round-robin, results found by several providers first) and each result lists its sources in `providers`. A provider is active only when configured: `SEARXNG_URL` for SearXNG, `YDC_API_KEY` for You.com (queries go to You.com, US).
 
 ### Parameters
 
 | Parameter    | Type       | Default | Description                                           |
 | ------------ | ---------- | ------- | ----------------------------------------------------- |
 | `query`      | `str`       | required | Search query string                                   |
-| `language`   | `str`       | `"en"`    | Language code (e.g. `"en"`, `"de"`, `"fr"`)                 |
+| `language`   | `str`       | `"en"`    | Language code (e.g. `"en"`, `"de"`, `"fr"`). You.com: codes it does not support search without a language filter |
 | `time_range` | `str`       | `null`   | `"day"`, `"week"`, `"month"`, `"year"`                       |
-| `categories` | `List[str]` | `null`   | `"general"`, `"images"`, `"news"`, etc.                        |
-| `engines`    | `List[str]` | `null`   | Specific engines to use                               |
+| `categories` | `List[str]` | `null`   | SearXNG only. `"general"`, `"images"`, `"news"`, etc.          |
+| `engines`    | `List[str]` | `null`   | SearXNG only. Specific engines to use                 |
 | `safesearch` | `int`       | `1`      | `0` (off), `1` (moderate), `2` (strict)                  |
-| `pageno`     | `int`       | `1`      | Page number (≥ 1)                                    |
+| `pageno`     | `int`       | `1`      | Page number (≥ 1). You.com returns no results beyond page 10 |
 | `max_results` | `int`      | `10`     | Max results (1–50)                                    |
-| `max_retries` | `int`      | `3`      | Max attempts for transient `RequestError` failures    |
+| `max_retries` | `int`      | `3`      | Max attempts per provider for transient request errors (timeouts included) |
+| `providers`  | `List[str]` | `null`   | Subset of configured providers: `"searxng"`, `"youcom"` (default: all configured) |
 
 ### Examples
 
@@ -106,14 +107,14 @@ search(query="python tutorials")
 # With time filter
 search(query="latest AI news", time_range="week")
 
-# Specific category
+# Only SearXNG
+search(query="python tutorials", providers=["searxng"])
+
+# Specific category (SearXNG only)
 search(query="cute cats", categories=["images"])
 
 # In German
 search(query="Rezepte", language="de")
-
-# Strict safe search
-search(query="programming", safesearch=2)
 ```
 
 ### Response (JSON)
@@ -127,12 +128,11 @@ search(query="programming", safesearch=2)
       "title": "Python Tutorial - W3Schools",
       "url": "https://www.w3schools.com/python/",
       "content": "Well organized tutorials...",
-      "engine": "google",
-      "category": "general"
+      "publishedDate": "",
+      "providers": ["searxng", "youcom"]
     }
-  ],
-  "answers": [],
-  "suggestions": ["python for beginners", "python course"],
-  "corrections": []
+  ]
 }
 ```
+
+`SEARCH_RESULT_FIELDS` limits the fields per result (unset: all five fields above). If some providers fail, the others' results are returned. If all selected providers fail, or none is configured, the response is `{"error": "...", "query": "..."}` with a short reason per provider, e.g. `All selected search providers failed: searxng: request failed; youcom: API key rejected, check YDC_API_KEY`.

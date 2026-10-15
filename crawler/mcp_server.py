@@ -1,8 +1,9 @@
-"""MCP Server for the standalone crawler + SearXNG search.
+"""MCP Server for the standalone crawler + multi-provider web search.
 
 Provides tools for:
 - Crawling web pages and extracting markdown content
-- Searching the web via SearXNG metasearch engine
+- Searching the web via the configured providers (SearXNG, You.com),
+  queried in parallel and merged into one attributed result list
 
 Supports both STDIO and HTTP transports.
 
@@ -20,15 +21,15 @@ Usage:
     fastmcp run crawler/mcp_server.py:mcp --transport http --port 8000
 
 Environment Variables:
-    SEARXNG_URL: SearXNG instance URL (default: http://localhost:8888)
-    SEARXNG_USERNAME: Optional basic auth username
-    SEARXNG_PASSWORD: Optional basic auth password
+    SEARXNG_URL: SearXNG instance URL; enables SearXNG (no default)
+    SEARXNG_USERNAME: Optional basic auth username (set both or neither)
+    SEARXNG_PASSWORD: Optional basic auth password (set both or neither)
+    YDC_API_KEY: You.com API key; enables You.com (queries go to You.com, US)
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import logging
 import os
@@ -36,13 +37,18 @@ import sys
 import time
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-import httpx
 from fastmcp import FastMCP
 
+from . import search_orchestrator
 from .document import CrawledDocument
-from .env import load_config, searxng_extra_headers
+from .env import load_config
+from .search_orchestrator import (
+    SearchProviderError,
+    configured_providers,
+    serialize_search_results,
+)
 
 # Load .env with config-dir fallback before reading environment variables
 load_config()
@@ -73,11 +79,6 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger(__name__)
 
-# SearXNG configuration from environment
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
-SEARXNG_USERNAME = os.getenv("SEARXNG_USERNAME")
-SEARXNG_PASSWORD = os.getenv("SEARXNG_PASSWORD")
-
 # Create the MCP server
 mcp = FastMCP(
     name="Web Crawler & Search",
@@ -89,7 +90,8 @@ mcp = FastMCP(
        - crawl_site: Crawl an entire website with depth/page limits
 
     2. Web Search Tool:
-       - search: Search the web using SearXNG metasearch engine
+       - search: Search the web via the configured providers (SearXNG, You.com),
+         queried in parallel; results are merged and attributed per provider
 
     Output formats for crawl tools:
     - markdown: Clean concatenated markdown (default)
@@ -420,64 +422,8 @@ async def crawl_site(
 
 
 # =============================================================================
-# SEARXNG SEARCH TOOL
+# SEARCH TOOL
 # =============================================================================
-
-
-def _parse_search_result_fields() -> Optional[List[str]]:
-    """Parse SEARCH_RESULT_FIELDS env var; empty/unset means all-fields mode."""
-    raw_fields = os.getenv("SEARCH_RESULT_FIELDS")
-    if raw_fields is None:
-        return None
-
-    fields = [field.strip() for field in raw_fields.split(",") if field.strip()]
-    if not fields:
-        return None
-
-    return fields
-
-
-def _filter_search_results(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter result fields and envelope based on SEARCH_RESULT_FIELDS."""
-    fields = _parse_search_result_fields()
-    if fields is None:
-        return data
-
-    field_set = set(fields)
-    raw_results = data.get("results")
-    results: List[Dict[str, Any]] = []
-
-    if isinstance(raw_results, list):
-        for item in raw_results:
-            if isinstance(item, dict):
-                filtered_item = {k: v for k, v in item.items() if k in field_set}
-                results.append(filtered_item)
-
-    return {
-        "query": data.get("query", ""),
-        "number_of_results": len(results),
-        "results": results,
-    }
-
-
-def _get_searxng_client() -> httpx.AsyncClient:
-    """Create an httpx client for SearXNG with optional basic auth."""
-    auth = None
-    if SEARXNG_USERNAME and SEARXNG_PASSWORD:
-        auth = httpx.BasicAuth(SEARXNG_USERNAME, SEARXNG_PASSWORD)
-
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
-    headers.update(searxng_extra_headers())
-
-    return httpx.AsyncClient(
-        base_url=SEARXNG_URL,
-        auth=auth,
-        headers=headers,
-        timeout=30.0,
-    )
 
 
 @mcp.tool
@@ -491,27 +437,36 @@ async def search(
     pageno: int = 1,
     max_results: int = 10,
     max_retries: int = 3,
+    providers: Optional[List[str]] = None,
 ):
     """
-    Search the web using SearXNG metasearch engine.
+    Search the web via the configured search providers (SearXNG, You.com).
+
+    All configured providers are queried in parallel. Their results are merged
+    (URL dedup, round-robin, results found by several providers first) and each
+    result lists the providers that returned it.
 
     Args:
         query: Search query string (required)
         language: Language code for results (e.g., 'en', 'de', 'fr'). Default: 'en'
         time_range: Time range filter - 'day', 'week', 'month', or 'year'. Default: None (no filter)
-        categories: Categories to search (e.g., ['general', 'images', 'news']). Default: None (all)
-        engines: Specific search engines to use. Default: None (all available)
+        categories: SearXNG only. Categories to search (e.g., ['general', 'images', 'news']). Default: None (all)
+        engines: SearXNG only. Specific search engines to use. Default: None (all available)
         safesearch: Safe search level - 0 (off), 1 (moderate), 2 (strict). Default: 1
         pageno: Page number for results (minimum 1). Default: 1
         max_results: Maximum results to return (1-50). Default: 10
-        max_retries: Maximum attempts for transient RequestError failures (default: 3)
+        max_retries: Maximum attempts per provider for transient request errors (default: 3)
+        providers: Subset of configured providers to query ('searxng', 'youcom').
+            Default: None (all configured providers)
 
     Returns:
-        JSON string with search results.
-        SEARCH_RESULT_FIELDS controls the response shape:
-        - unset/empty: full SearXNG payload (backward-compatible)
-        - set (comma-separated): each result keeps only listed fields and
-          envelope is trimmed to {query, number_of_results, results}
+        JSON string {query, number_of_results, results}. Each result has
+        title, url, content, publishedDate and providers.
+        SEARCH_RESULT_FIELDS (comma-separated) limits the fields per result;
+        unset/empty returns all of them.
+        If some providers fail, the results of the others are returned. If all
+        selected providers fail (or none is configured), the JSON contains
+        "error" with a short reason per provider, and "query".
 
     Examples:
         # Basic search
@@ -520,106 +475,43 @@ async def search(
         # Search with time filter
         search(query="latest AI news", time_range="week")
 
-        # Search specific category
-        search(query="cute cats", categories=["images"])
+        # Only one provider
+        search(query="python tutorials", providers=["searxng"])
 
         # Search in German
         search(query="Rezepte", language="de")
     """
-    LOGGER.info("Searching SearXNG for: %s", query)
+    LOGGER.info("Searching for: %s", query)
     start = time.monotonic()
 
-    # Build search parameters
-    params: Dict[str, Any] = {
-        "q": query,
-        "format": "json",
-        "language": language,
-        "safesearch": safesearch,
-        "pageno": max(1, pageno),
-    }
-
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-
-    if categories:
-        params["categories"] = ",".join(categories)
-
-    if engines:
-        params["engines"] = ",".join(engines)
-
-    attempts = max(1, max_retries)
-    base_backoff = 0.5
-
     try:
-        data = None
-        for attempt in range(1, attempts + 1):
-            try:
-                async with _get_searxng_client() as client:
-                    response = await client.get("/search", params=params)
-                    response.raise_for_status()
-                    data = response.json()
-                break
-            except httpx.RequestError as exc:
-                if attempt < attempts:
-                    backoff = base_backoff * (2 ** (attempt - 1))
-                    LOGGER.warning(
-                        "Search request error on attempt %d/%d for '%s': %s; retrying in %.1fs",
-                        attempt,
-                        attempts,
-                        query,
-                        exc,
-                        backoff,
-                    )
-                    await asyncio.sleep(backoff)
-                    continue
-
-                elapsed = time.monotonic() - start
-                error_msg = f"Request failed: {str(exc)}"
-                LOGGER.error(
-                    "Search failed after %d attempt(s) in %.1fs: %s",
-                    attempt,
-                    elapsed,
-                    error_msg,
-                )
-                return json.dumps(
-                    {"error": error_msg, "query": query}, ensure_ascii=False
-                )
-
-        if data is None:
-            elapsed = time.monotonic() - start
-            error_msg = "Request failed: no response data"
-            LOGGER.error("Search failed in %.1fs: %s", elapsed, error_msg)
-            return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
-
-        # Limit results
-        max_results = min(max(1, max_results), 50)
-        if "results" in data:
-            data["results"] = data["results"][:max_results]
-            data["number_of_results"] = len(data["results"])
-
-        data = _filter_search_results(data)
+        results = await search_orchestrator.search(
+            query,
+            language=language,
+            time_range=time_range,
+            categories=categories,
+            engines=engines,
+            safesearch=safesearch,
+            pageno=pageno,
+            max_results=max_results,
+            max_retries=max_retries,
+            providers=providers,
+        )
+        data = serialize_search_results(query, results)
 
         elapsed = time.monotonic() - start
         LOGGER.info(
             "Search returned %d results in %.1fs",
-            data.get("number_of_results", 0),
+            data["number_of_results"],
             elapsed,
         )
 
         return json.dumps(data, indent=2, ensure_ascii=False)
 
-    except httpx.HTTPStatusError as exc:
+    except SearchProviderError as exc:
         elapsed = time.monotonic() - start
-        if exc.response.status_code == 401:
-            error_msg = (
-                "Authentication failed. Check SEARXNG_USERNAME and SEARXNG_PASSWORD."
-            )
-        else:
-            error_msg = (
-                f"SearXNG API error: {exc.response.status_code} - {exc.response.text}"
-            )
-        LOGGER.error("Search failed in %.1fs: %s", elapsed, error_msg)
-        return json.dumps({"error": error_msg, "query": query}, ensure_ascii=False)
+        LOGGER.error("Search failed in %.1fs: %s", elapsed, exc)
+        return json.dumps({"error": str(exc), "query": query}, ensure_ascii=False)
 
     except Exception as exc:
         elapsed = time.monotonic() - start
@@ -635,16 +527,25 @@ async def search(
 
 def main():
     """CLI entry point for running the MCP server."""
+    if sys.argv[1:2] == ["setup"]:
+        from .setup import main as setup_main
+
+        sys.exit(setup_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Run the web crawler & search MCP server.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Environment Variables:
-    SEARXNG_URL       SearXNG instance URL (default: http://localhost:8888)
-    SEARXNG_USERNAME  Optional basic auth username
-    SEARXNG_PASSWORD  Optional basic auth password
+    SEARXNG_URL       SearXNG instance URL; enables SearXNG (no default)
+    SEARXNG_USERNAME  Optional basic auth username (set both or neither)
+    SEARXNG_PASSWORD  Optional basic auth password (set both or neither)
+    YDC_API_KEY       You.com API key; enables You.com (queries go to You.com, US)
 
 Examples:
+    # Register the server with your installed coding agents
+    searxncrawl setup
+
     # STDIO transport (default, for Claude Desktop)
     python -m crawler.mcp_server
 
@@ -660,7 +561,7 @@ Examples:
     # Enable CORS for all origins (use with caution)
     python -m crawler.mcp_server --transport http --cors-origins "*"
 
-    # With custom SearXNG instance
+    # With a SearXNG instance as search provider
     SEARXNG_URL=https://search.example.com python -m crawler.mcp_server
 """,
     )
@@ -710,8 +611,11 @@ Examples:
         LOGGER.info("searxNcrawl v%s starting", _pkg_version("searxNcrawl"))
     except Exception:
         LOGGER.info("searxNcrawl starting")
-    LOGGER.info("SearXNG URL: %s", SEARXNG_URL)
-    LOGGER.info("SearXNG Auth: %s", "Enabled" if SEARXNG_USERNAME else "Disabled")
+    LOGGER.info(
+        "Search providers: %s",
+        ", ".join(configured_providers())
+        or "none (set a valid http(s) SEARXNG_URL and/or YDC_API_KEY)",
+    )
 
     if args.transport == "http":
         LOGGER.info("Starting MCP server on http://%s:%d/mcp", args.host, args.port)

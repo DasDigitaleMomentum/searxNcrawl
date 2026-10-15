@@ -17,7 +17,7 @@ services:
       retries: 3
       start_period: 15s
     environment:
-      SEARXNG_URL: ${SEARXNG_URL:-http://localhost:8888}
+      SEARXNG_URL: ${SEARXNG_URL:-}
     ports:
       - "${MCP_PORT:-9555}:${MCP_PORT:-9555}"
     command:

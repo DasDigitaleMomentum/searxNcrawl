@@ -1,0 +1,85 @@
+name: Bug report
+description: A search, crawl or MCP call does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please search existing issues first.
+        **Security vulnerabilities must not be reported here** — see the security policy instead.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The tool call or command, its arguments and the URL or query. For crawl problems, a public URL that shows the issue helps most.
+      placeholder: |
+        crawl(urls=["https://example.com/page"], output_format="markdown")
+        or: crawl https://example.com/page --remove-links
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - search (SearXNG)
+        - crawl
+        - crawl_site
+        - crawl-capture / authenticated crawling
+        - MCP server / transport
+        - CLI
+        - Python API
+        - Installation (uvx, Docker, pip, uv)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: searxNcrawl version
+      description: PyPI version (`pip show searxncrawl`), release tag or commit SHA.
+      placeholder: "0.31.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - uvx
+        - Docker Compose
+        - pip
+        - uv (from a clone)
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and transport
+      description: For example Claude Code over STDIO, Cursor, VS Code, or HTTP at /mcp. Leave empty for CLI or Python API problems.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        - OS:
+        - Python:
+        - SearXNG version (for search problems):
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and output
+      description: Relevant log output, ideally with `LOG_LEVEL=DEBUG`. This is rendered as code, no backticks needed.
+      render: shell

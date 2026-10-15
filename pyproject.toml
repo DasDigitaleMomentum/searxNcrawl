@@ -5,7 +5,7 @@ description = "searxNcrawl web crawler with markdown extraction - no DB, no enri
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "crawl4ai>=0.8.5",
+    "crawl4ai>=0.9.1",
     "tldextract>=5.1.2",
     "playwright>=1.40.0",
     "fastmcp>=3.4.3",
@@ -66,6 +66,13 @@ include = ["crawler*"]
 [build-system]
 requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.uv]
+# nltk is a crawl4ai dependency with an unpatched advisory (GHSA-8mgp-746c-j5xp,
+# all versions <= 3.10.3). crawl4ai imports it only inside chunking and legacy
+# helpers that searxNcrawl never calls, so it is excluded from the lockfile.
+# Remove this exclusion once nltk ships a fixed release.
+exclude-dependencies = ["nltk"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

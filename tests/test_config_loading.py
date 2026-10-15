@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import textwrap
 from pathlib import Path
@@ -152,3 +153,86 @@ class TestMcpServerUsesSharedConfig:
             stripped = line.strip()
             if stripped == "load_dotenv()" or stripped == "load_dotenv()  ":
                 pytest.fail(f"Found bare load_dotenv() in mcp_server.py: {line!r}")
+
+
+class TestSearxngExtraHeaders:
+    """searxng_extra_headers should parse SEARXNG_EXTRA_HEADERS safely."""
+
+    def test_unset_returns_empty_dict(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("SEARXNG_EXTRA_HEADERS", raising=False)
+        assert env.searxng_extra_headers() == {}
+
+    def test_empty_string_returns_empty_dict(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", "   ")
+        assert env.searxng_extra_headers() == {}
+
+    def test_plain_headers_are_returned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(
+            "SEARXNG_EXTRA_HEADERS",
+            '{"X-Api-Key": "abc", "X-Other": "def"}',
+        )
+        assert env.searxng_extra_headers() == {
+            "X-Api-Key": "abc",
+            "X-Other": "def",
+        }
+
+    def test_value_not_starting_with_at_is_not_a_file_ref(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", '{"X-K": "value@not-path"}')
+        assert env.searxng_extra_headers() == {"X-K": "value@not-path"}
+
+    def test_at_file_value_is_read_from_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        secret = tmp_path / "secret.txt"
+        secret.write_text("topsecret\n")
+        monkeypatch.setenv(
+            "SEARXNG_EXTRA_HEADERS",
+            json.dumps({"CF-Access-Client-Secret": f"@{secret}"}),
+        )
+        assert env.searxng_extra_headers() == {
+            "CF-Access-Client-Secret": "topsecret"
+        }
+
+    def test_missing_file_returns_empty_dict(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(
+            "SEARXNG_EXTRA_HEADERS",
+            json.dumps({"X-Missing": f"@{tmp_path}/nope.txt"}),
+        )
+        assert env.searxng_extra_headers() == {}
+
+    def test_invalid_json_returns_empty_dict(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", "not json at all")
+        assert env.searxng_extra_headers() == {}
+
+    def test_non_object_json_returns_empty_dict(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", "[1, 2, 3]")
+        assert env.searxng_extra_headers() == {}
+
+    def test_non_string_values_are_coerced_to_str(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", '{"X-N": 123}')
+        assert env.searxng_extra_headers() == {"X-N": "123"}
+
+    def test_cli_and_mcp_server_import_helper(self) -> None:
+        """Both entry points should consume the shared helper."""
+        for module in ("cli", "mcp_server"):
+            source = (
+                Path(__file__).parent.parent / "crawler" / f"{module}.py"
+            ).read_text()
+            assert "from .env import load_config, searxng_extra_headers" in source
+            assert "searxng_extra_headers()" in source

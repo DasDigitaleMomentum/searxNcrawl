@@ -14,7 +14,9 @@ it is copied to ``~/.config/searxncrawl/.env`` as a starting template.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -63,3 +65,61 @@ def load_config() -> None:
             load_dotenv(CONFIG_ENV_FILE)
         except OSError:
             pass  # Silently continue without config
+
+
+def _resolve_header_value(value: str) -> str:
+    """Resolve a header value, supporting ``@/path`` file references.
+
+    A value starting with ``@`` is treated as a file path (``~`` and
+    relative paths are resolved against the home/cwd); the file content
+    is used as the header value with surrounding whitespace stripped.
+    Can be used to keep centralized secrets out of the ``.env`` file.
+    """
+    if not value.startswith("@"):
+        return value
+    path = Path(value[1:]).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"SEARXNG_EXTRA_HEADERS value file not found: {path}"
+        )
+    return path.read_text(encoding="utf-8").strip()
+
+
+def searxng_extra_headers() -> dict[str, str]:
+    """Parse ``SEARXNG_EXTRA_HEADERS`` as a JSON object of extra HTTP headers.
+
+    Example value::
+
+        SEARXNG_EXTRA_HEADERS={"CF-Access-Client-Id": "@/some/file/path/cloudflare_id", "CF-Access-Client-Secret": "@/some/file/path/cloudflare_secret"}
+
+    Unset or empty means no extra headers. Values of the form ``@/path``
+    are loaded from a file. Invalid JSON is logged and ignored so a
+    broken value cannot take a search run down.
+    """
+    raw = os.getenv("SEARXNG_EXTRA_HEADERS")
+    if not raw or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw.strip())
+    except json.JSONDecodeError:
+        logging.getLogger(__name__).warning(
+            "SEARXNG_EXTRA_HEADERS is not valid JSON; ignoring it"
+        )
+        return {}
+    if not isinstance(parsed, dict):
+        logging.getLogger(__name__).warning(
+            "SEARXNG_EXTRA_HEADERS must be a JSON object; ignoring it"
+        )
+        return {}
+    try:
+        return {
+            str(key): _resolve_header_value(str(val))
+            for key, val in parsed.items()
+        }
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "SEARXNG_EXTRA_HEADERS value file unreadable: %s", exc
+        )
+        return {}

@@ -42,7 +42,7 @@ import httpx
 from fastmcp import FastMCP
 
 from .document import CrawledDocument
-from .env import load_config
+from .env import load_config, searxng_extra_headers
 
 # Load .env with config-dir fallback before reading environment variables
 load_config()
@@ -466,13 +466,16 @@ def _get_searxng_client() -> httpx.AsyncClient:
     if SEARXNG_USERNAME and SEARXNG_PASSWORD:
         auth = httpx.BasicAuth(SEARXNG_USERNAME, SEARXNG_PASSWORD)
 
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    headers.update(searxng_extra_headers())
+
     return httpx.AsyncClient(
         base_url=SEARXNG_URL,
         auth=auth,
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
+        headers=headers,
         timeout=30.0,
     )
 

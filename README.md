@@ -141,6 +141,7 @@ The `search` tool and CLI command require a SearXNG instance with **JSON output 
 | `SEARXNG_URL`          | `http://localhost:8888`               | SearXNG instance URL                                                                                                                |
 | `SEARXNG_USERNAME`     | (none)                                | Optional basic auth user                                                                                                            |
 | `SEARXNG_PASSWORD`     | (none)                                | Optional basic auth pass                                                                                                            |
+| `SEARXNG_EXTRA_HEADERS`| Cloudflare Access Example: `{"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "CF-Access-Client-Id": "@/some/file/path/cloudflare_id", "CF-Access-Client-Secret": "@/some/file/path/cloudflare_secret"}`                               | Extra SearXNG HTTP request headers as a JSON object, header values of the form `@/path` are loaded from a file. |
 | `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate`     | Comma-separated result fields. Unset = all SearXNG fields. Available: title, url, content, publishedDate, engine, score, category, img_src, thumbnail |
 
 Example `.env`:

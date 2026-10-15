@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .env import load_config
+from .env import load_config, searxng_extra_headers
 
 load_config()
 
@@ -890,14 +890,17 @@ async def _run_search_async(args: argparse.Namespace) -> int:
     if searxng_username and searxng_password:
         auth = httpx.BasicAuth(searxng_username, searxng_password)
 
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    headers.update(searxng_extra_headers())
+
     try:
         async with httpx.AsyncClient(
             base_url=searxng_url,
             auth=auth,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             timeout=30.0,
         ) as client:
             response = await client.get("/search", params=params)

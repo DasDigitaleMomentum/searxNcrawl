@@ -41,15 +41,19 @@ jobs:
             exit 1
           fi
 
-      - name: Check that server.json matches the project version
+      - name: Check that server.json and the MCPB bundle match the project version
         run: |
           version="$(uv version --short)"
-          for v in "$(jq -r .version server.json)" "$(jq -r '.packages[0].version' server.json)"; do
+          for v in "$(jq -r .version server.json)" "$(jq -r '.packages[0].version' server.json)" "$(jq -r .version mcpb/manifest.json)"; do
             if [ "$v" != "$version" ]; then
-              echo "::error::server.json version '$v' does not match pyproject version '$version'"
+              echo "::error::server.json or mcpb/manifest.json version '$v' does not match pyproject version '$version'"
               exit 1
             fi
           done
+          if ! grep -q "\"searxncrawl==$version\"" mcpb/pyproject.toml; then
+            echo "::error::mcpb/pyproject.toml does not pin searxncrawl==$version"
+            exit 1
+          fi
 
       - name: Build sdist and wheel
         run: uv build

@@ -1,0 +1,71 @@
+{
+  "manifest_version": "0.4",
+  "name": "searxncrawl",
+  "display_name": "searxNcrawl",
+  "version": "0.32.0",
+  "description": "Web search via your own SearXNG and/or You.com, plus clean Markdown crawling with Crawl4AI and Playwright.",
+  "long_description": "searxNcrawl gives AI agents web search and clean Markdown crawling. `search` queries the configured providers (your SearXNG instance with JSON output enabled and/or You.com) in parallel and returns one merged, deduplicated list with the source of each result. `crawl` renders one or many URLs in Playwright's Chromium via Crawl4AI and returns Markdown or JSON; `crawl_site` follows links from a seed URL within depth and page limits. Crawling needs no search provider. The first crawl downloads Chromium once (about 550 MB).",
+  "author": {
+    "name": "DDM – Das Digitale Momentum GmbH & Co. KG",
+    "url": "https://www.das-digitale-momentum.de/en/open-source/#searxncrawl"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DasDigitaleMomentum/searxNcrawl"
+  },
+  "homepage": "https://www.searxncrawl.io/",
+  "documentation": "https://github.com/DasDigitaleMomentum/searxNcrawl#readme",
+  "support": "https://github.com/DasDigitaleMomentum/searxNcrawl/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "src/server.py"],
+      "env": {
+        "SEARXNG_URL": "${user_config.searxng_url}",
+        "YDC_API_KEY": "${user_config.ydc_api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "search",
+      "description": "Search the web through the configured providers (SearXNG, You.com) in parallel; results are merged and attributed per provider."
+    },
+    {
+      "name": "crawl",
+      "description": "Crawl one or more URLs and return clean Markdown or JSON with metadata and references."
+    },
+    {
+      "name": "crawl_site",
+      "description": "Crawl a website from a seed URL within depth, page and timeout limits."
+    }
+  ],
+  "user_config": {
+    "searxng_url": {
+      "type": "string",
+      "title": "SearXNG URL",
+      "description": "URL of your SearXNG instance with JSON output enabled, e.g. http://localhost:8888. Leave empty to search with You.com only.",
+      "required": false,
+      "default": ""
+    },
+    "ydc_api_key": {
+      "type": "string",
+      "title": "You.com API key",
+      "description": "Optional. Enables You.com search; queries go to You.com (US).",
+      "sensitive": true,
+      "required": false,
+      "default": ""
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "keywords": ["search", "searxng", "crawl4ai", "web-crawler", "markdown", "you.com"],
+  "license": "MIT"
+}

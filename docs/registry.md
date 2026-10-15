@@ -38,3 +38,17 @@ curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.DasDi
 `server.json` has two version fields, the server `version` and `packages[0].version`. Both must equal the `version` in `pyproject.toml`; the release workflow fails if they differ. Bump all three in the release PR.
 
 `server.json` describes the latest PyPI release, so its environment variables follow that release.
+
+## MCPB bundle
+
+`mcpb/` is the source of an [MCPB](https://github.com/modelcontextprotocol/mcpb) bundle with the `uv` server type: `mcpb/pyproject.toml` pins the PyPI release, `mcpb/src/server.py` starts the MCP server, and `mcpb/manifest.json` asks for `SEARXNG_URL` and the optional `YDC_API_KEY`. Smithery lists local STDIO servers from such a bundle, and Claude Desktop installs it with a double click.
+
+```bash
+npx @anthropic-ai/mcpb validate mcpb/manifest.json
+npx @anthropic-ai/mcpb pack mcpb searxncrawl-<version>.mcpb
+gh release upload v<version> searxncrawl-<version>.mcpb
+smithery auth login
+smithery mcp publish searxncrawl-<version>.mcpb -n <namespace>/searxncrawl
+```
+
+The release workflow fails if `mcpb/manifest.json` or the pin in `mcpb/pyproject.toml` does not match `pyproject.toml`.

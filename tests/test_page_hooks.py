@@ -207,3 +207,14 @@ def test_config_skips_flatten_shadow_dom_on_old_crawl4ai(monkeypatch) -> None:
 
     assert isinstance(config, LegacyRunConfig)
     assert not hasattr(config, "flatten_shadow_dom")
+
+
+def test_flatten_shadow_dom_script_escapes_text_nodes() -> None:
+    """Text like "<details>" must stay text, not turn into markup, after flattening."""
+    import crawl4ai.async_crawler_strategy as strategy
+
+    script = strategy.load_js_script("flatten_shadow_dom")
+
+    assert "return node.textContent;" not in script
+    assert script.count(".replace(/</g, '&lt;')") == 2
+    assert strategy.load_js_script("update_image_dimensions")

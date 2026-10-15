@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import version
 from typing import List, Optional
 
+import crawl4ai.async_crawler_strategy as _crawl4ai_strategy
 from crawl4ai import CrawlerRunConfig
 from crawl4ai.async_configs import CacheMode
 from crawl4ai.content_filter_strategy import PruningContentFilter
@@ -201,6 +202,32 @@ def build_markdown_generator() -> DefaultMarkdownGenerator:
             "ignore_images": True,
         },
     )
+
+
+# crawl4ai's flatten_shadow_dom.js serializes text nodes without escaping them,
+# so text such as "<details>" in MDN prose or HTML code samples is re-parsed as
+# markup: closing tags vanish from code blocks and the broken tree defeats
+# target_elements, pulling navigation into the markdown. Escape the text.
+_UNESCAPED_TEXT = "if (node.nodeType === Node.TEXT_NODE) return node.textContent;"
+_ESCAPED_TEXT = (
+    "if (node.nodeType === Node.TEXT_NODE) return node.textContent"
+    ".replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');"
+)
+_load_js_script = _crawl4ai_strategy.load_js_script
+
+
+def _load_js_script_escaping_text(script_name: str) -> str:
+    script = _load_js_script(script_name)
+    if script_name != "flatten_shadow_dom":
+        return script
+    if _UNESCAPED_TEXT not in script:
+        LOGGER.warning(
+            "crawl4ai flatten_shadow_dom.js changed; text escaping patch not applied"
+        )
+    return script.replace(_UNESCAPED_TEXT, _ESCAPED_TEXT)
+
+
+_crawl4ai_strategy.load_js_script = _load_js_script_escaping_text
 
 
 def _shadow_dom_kwargs() -> dict:

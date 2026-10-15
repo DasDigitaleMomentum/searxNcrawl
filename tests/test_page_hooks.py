@@ -188,3 +188,33 @@ async def test_reload_hook_reloads_once_in_chromium() -> None:
             assert await page.inner_text("main") == "load 2"
         finally:
             await browser.close()
+
+
+def test_config_skips_flatten_shadow_dom_on_old_crawl4ai(monkeypatch) -> None:
+    """crawl4ai < 0.8.5 rejects flatten_shadow_dom; building the config must not crash."""
+
+    class LegacyRunConfig:
+        def __init__(self, **kwargs) -> None:
+            if "flatten_shadow_dom" in kwargs:
+                raise TypeError(
+                    "__init__() got an unexpected keyword argument 'flatten_shadow_dom'"
+                )
+            self.__dict__.update(kwargs)
+
+    monkeypatch.setattr("crawler.config.CrawlerRunConfig", LegacyRunConfig)
+
+    config = build_markdown_run_config()
+
+    assert isinstance(config, LegacyRunConfig)
+    assert not hasattr(config, "flatten_shadow_dom")
+
+
+def test_flatten_shadow_dom_script_escapes_text_nodes() -> None:
+    """Text like "<details>" must stay text, not turn into markup, after flattening."""
+    import crawl4ai.async_crawler_strategy as strategy
+
+    script = strategy.load_js_script("flatten_shadow_dom")
+
+    assert "return node.textContent;" not in script
+    assert script.count(".replace(/</g, '&lt;')") == 2
+    assert strategy.load_js_script("update_image_dimensions")

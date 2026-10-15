@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import weakref
 from dataclasses import dataclass, field
+from importlib.metadata import version
 from typing import List, Optional
 
+import crawl4ai.async_crawler_strategy as _crawl4ai_strategy
 from crawl4ai import CrawlerRunConfig
 from crawl4ai.async_configs import CacheMode
 from crawl4ai.content_filter_strategy import PruningContentFilter
@@ -205,6 +208,48 @@ def build_markdown_generator() -> DefaultMarkdownGenerator:
     )
 
 
+# crawl4ai's flatten_shadow_dom.js serializes text nodes without escaping them,
+# so text such as "<details>" in MDN prose or HTML code samples is re-parsed as
+# markup: closing tags vanish from code blocks and the broken tree defeats
+# target_elements, pulling navigation into the markdown. Escape the text.
+_UNESCAPED_TEXT = "if (node.nodeType === Node.TEXT_NODE) return node.textContent;"
+_ESCAPED_TEXT = (
+    "if (node.nodeType === Node.TEXT_NODE) return node.textContent"
+    ".replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');"
+)
+_load_js_script = _crawl4ai_strategy.load_js_script
+
+
+def _load_js_script_escaping_text(script_name: str) -> str:
+    script = _load_js_script(script_name)
+    if script_name != "flatten_shadow_dom":
+        return script
+    if _UNESCAPED_TEXT not in script:
+        LOGGER.warning(
+            "crawl4ai flatten_shadow_dom.js changed; text escaping patch not applied"
+        )
+    return script.replace(_UNESCAPED_TEXT, _ESCAPED_TEXT)
+
+
+_crawl4ai_strategy.load_js_script = _load_js_script_escaping_text
+
+
+def _shadow_dom_kwargs() -> dict:
+    """Read content that sites render into shadow roots (e.g. MDN code examples).
+
+    crawl4ai < 0.8.5 has no ``flatten_shadow_dom`` and rejects it with a
+    TypeError, which failed every crawl on stale installs; skip it there.
+    """
+    if "flatten_shadow_dom" in inspect.signature(CrawlerRunConfig).parameters:
+        return {"flatten_shadow_dom": True}
+    LOGGER.warning(
+        "crawl4ai %s lacks flatten_shadow_dom; shadow DOM content is skipped. "
+        "Upgrade to crawl4ai>=0.8.5.",
+        version("crawl4ai"),
+    )
+    return {}
+
+
 def build_markdown_run_config(
     overrides: Optional[RunConfigOverrides] = None,
 ) -> CrawlerRunConfig:
@@ -226,10 +271,8 @@ def build_markdown_run_config(
         # The page reload that used to live here runs as a Playwright hook now
         # (crawler.page_hooks), so it completes before wait_for and capture.
         js_code="window.scrollTo(0, document.body.scrollHeight);",
-        # Read content that sites render into shadow roots (e.g. MDN code
-        # examples); without it those blocks are missing from the markdown.
-        flatten_shadow_dom=True,
         wait_for=build_content_wait_condition(),
+        **_shadow_dom_kwargs(),
     )
     if overrides:
         _apply_overrides(config, overrides)

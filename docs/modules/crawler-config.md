@@ -59,7 +59,7 @@ version: 1.0
 - Key defaults in `build_markdown_run_config`:
   - `cache_mode=CacheMode.BYPASS` (`crawler/config.py:172`)
   - JS scroll snippet; the page reload runs as a Playwright `after_goto` hook (`crawler/page_hooks.py`) for configs from `build_markdown_run_config()` without a custom `js_code` override
-  - `flatten_shadow_dom=True` so content rendered into shadow roots (e.g. MDN code examples) reaches the markdown
+  - `flatten_shadow_dom=True` so content rendered into shadow roots (e.g. MDN code examples) reaches the markdown; skipped on Crawl4AI < 0.8.5, and Crawl4AI's flatten script is patched to escape text nodes (see `_load_js_script_escaping_text`)
   - `wait_for` condition from `build_content_wait_condition()` (`crawler/config.py:44`, used at line 213): ready when any `MAIN_SELECTORS` area has more than `MIN_CONTENT_CHARS` characters; otherwise falls back to the page body after `CONTENT_WAIT_GRACE_MS` once the document has loaded
 - `build_discovery_run_config` adjusts wait and behavior for deep crawl/discovery use (`crawler/config.py:193`, `crawler/config.py:197`).
 

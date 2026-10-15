@@ -45,7 +45,7 @@ version: 1.0
 2. Function checks CWD for `.env` → loads if found.
 3. Falls back to `~/.config/searxncrawl/.env` → loads if found.
 4. If neither exists, copies `.env.example` from package root to config dir and loads it.
-5. Environment variables (`SEARXNG_URL`, etc.) are now available via `os.getenv()`.
+5. Environment variables (`SEARXNG_URL`, `YDC_API_KEY`, etc.) are now available via `os.getenv()`. When `.env.example` was copied, the log asks the user to set `SEARXNG_URL` and/or `YDC_API_KEY`.
 
 ## Configuration
 

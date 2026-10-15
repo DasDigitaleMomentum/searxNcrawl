@@ -24,11 +24,11 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**searxNcrawl** is an open-source MCP server and CLI toolkit that gives AI agents web search and clean Markdown crawling, built on [SearXNG](https://github.com/searxng/searxng) and [Crawl4AI](https://github.com/unclecode/crawl4ai). It runs on your own hardware, needs no API key and succeeds `searxng-mcp`.
+**searxNcrawl** is an open-source MCP server and CLI toolkit that gives AI agents web search and clean Markdown crawling, built on [Crawl4AI](https://github.com/unclecode/crawl4ai). Search queries the configured providers, [SearXNG](https://github.com/searxng/searxng) and/or [You.com](https://you.com), in parallel and merges the results. It runs on your own hardware, needs no API key with SearXNG and succeeds `searxng-mcp`.
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>Web search</b><br>Metasearch through your own SearXNG instance, filtered by language, time range, categories and engines.</td>
+    <td width="33%" valign="top"><b>Web search</b><br>Your own SearXNG instance and/or the You.com API, queried in parallel; results are merged and attributed to their providers, filtered by language and time range.</td>
     <td width="33%" valign="top"><b>Page crawl</b><br>One or many URLs to Markdown or JSON, with repeated blocks removed and links optionally stripped.</td>
     <td width="33%" valign="top"><b>Site crawl</b><br>Whole sites with depth and page limits, tuned for documentation.</td>
   </tr>
@@ -65,10 +65,10 @@ Restart the agents afterwards. Prefer to run the server yourself? Pick your setu
 
 ### Docker Compose
 
-MCP server with Playwright/Chromium, ready in one command. SearXNG required separately for search.
+MCP server with Playwright/Chromium, ready in one command. Search needs at least one provider (a SearXNG instance and/or a You.com API key).
 
 ```bash
-cp .env.example .env          # set SEARXNG_URL to your SearXNG instance
+cp .env.example .env          # set SEARXNG_URL and/or YDC_API_KEY
 docker compose up --build
 ```
 
@@ -86,7 +86,7 @@ The latest development version runs straight from GitHub with `uvx --from git+ht
 
 ### pip (standalone)
 
-CLI tools, Python API, and MCP server. SearXNG required for search.
+CLI tools, Python API, and MCP server. Search needs SEARXNG_URL and/or YDC_API_KEY.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -115,7 +115,7 @@ uv run playwright install chromium
 | Python API              | —              | ✅        |
 | CORS (HTTP)             | ✅             | ✅        |
 
-¹ Requires a SearXNG instance. ² `docker compose exec searxncrawl crawl ...`
+¹ Requires at least one search provider (SearXNG instance and/or You.com API key). ² `docker compose exec searxncrawl crawl ...`
 
 ## Features
 
@@ -130,8 +130,9 @@ uv run playwright install chromium
 - **Dedup guardrails** — non-destructive metadata signals when removal is unusually aggressive
 
 ### Web Search
-- SearXNG metasearch integration (privacy-respecting)
-- Configurable language, time range, categories, engines, safe search
+- Providers: SearXNG (self-hosted metasearch) and You.com (API key), each active only when configured
+- All configured providers queried in parallel; results merged, deduplicated and attributed per provider
+- Configurable language, time range, page; categories, engines and safe search for SearXNG
 
 ### MCP Server
 - **STDIO transport** — for MCP harnesses (Zed, opencode, VS Code, Claude Code, etc.)
@@ -141,18 +142,18 @@ uv run playwright install chromium
 
 ### CLI Tools
 - `crawl` — crawl pages from the command line
-- `search` — search the web via SearXNG
+- `search` — search the web via the configured providers (SearXNG, You.com)
 - `crawl-capture` — session capture for authenticated crawling
 
 ## Installation
 
 ### Docker Compose
 
-The Compose stack includes searxNcrawl + Playwright/Chromium. SearXNG must be provided separately.
+The Compose stack includes searxNcrawl + Playwright/Chromium. Search providers (a SearXNG instance and/or a You.com API key) are configured separately.
 
 ```bash
 cp .env.example .env
-# Edit .env: set SEARXNG_URL to your SearXNG instance
+# Edit .env: set SEARXNG_URL and/or YDC_API_KEY
 docker compose up --build
 ```
 
@@ -183,23 +184,35 @@ uv sync
 uv run playwright install chromium
 ```
 
-### SearXNG (search feature)
+### Search providers
 
-The `search` tool and CLI command require a SearXNG instance with **JSON output enabled** (`search.formats` in `settings.yml`). For all setups you need your own instance — self-hosting is recommended over public instances (rate limits).
+`search` (MCP tool and CLI command) queries every configured provider in parallel. A provider is active only when it is configured; with none configured, search returns an error naming `SEARXNG_URL` and `YDC_API_KEY`.
+
+- **SearXNG** — active when `SEARXNG_URL` is a valid http(s) URL without embedded credentials. There is no default URL. The instance needs **JSON output enabled** (`search.formats` in `settings.yml`); self-hosting is recommended over public instances (rate limits). Basic auth credentials are optional: set both or neither.
+- **You.com** — active when `YDC_API_KEY` is set (non-empty). Requests send the key in the `X-API-Key` header and the User-Agent `youdotcom-integration/dasdigitalemomentum-searxncrawl`. You.com queries go to You.com in the US.
+
+**How results are combined:**
+
+- `providers` (MCP, e.g. `["searxng"]`) or `--providers searxng,youcom` (CLI) narrows a call to a subset of the configured providers; unknown or unconfigured names return an error. Default: all configured providers.
+- Results are merged round-robin with conservative URL dedup. Results returned by several providers come first, and every result lists its sources in `providers`. The list is capped at `max_results` (1–50).
+- `language`, `time_range`, `safesearch` and `pageno` apply to both providers; `categories` and `engines` are SearXNG only. For You.com, `language` is mapped to its supported codes (e.g. `en-us` → `EN`; unsupported codes such as `zh` search without a language filter), and pages beyond 10 return no You.com results.
+- If some providers fail, the results of the others are returned (the failure is logged as a warning). If all selected providers fail, search returns an error with a short reason per provider (no secrets, URLs or response bodies), e.g. `youcom: API key rejected, check YDC_API_KEY`.
 
 **Environment variables:**
 
-| Variable               | Example / Recommended                 | Description                                                                                                                         |
-| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `SEARXNG_URL`          | `http://localhost:8888`               | SearXNG instance URL                                                                                                                |
-| `SEARXNG_USERNAME`     | (none)                                | Optional basic auth user                                                                                                            |
-| `SEARXNG_PASSWORD`     | (none)                                | Optional basic auth pass                                                                                                            |
-| `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate`     | Comma-separated result fields. Unset = all SearXNG fields. Available: title, url, content, publishedDate, engine, score, category, img_src, thumbnail |
+| Variable               | Example / Recommended                          | Description                                                                                                  |
+| ---------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `SEARXNG_URL`          | (none)                                         | SearXNG instance URL, e.g. `http://localhost:8888`; enables SearXNG                                          |
+| `SEARXNG_USERNAME`     | (none)                                         | Optional basic auth user (set both or neither)                                                               |
+| `SEARXNG_PASSWORD`     | (none)                                         | Optional basic auth pass (set both or neither)                                                               |
+| `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |
+| `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate,providers`    | Comma-separated result fields. Unset = all fields. Available: title, url, content, publishedDate, providers  |
 
 Example `.env`:
 ```bash
 SEARXNG_URL=http://localhost:8888
-SEARCH_RESULT_FIELDS=title,url,content,publishedDate
+# YDC_API_KEY=your-you.com-api-key
+SEARCH_RESULT_FIELDS=title,url,content,publishedDate,providers
 LOG_LEVEL=INFO
 ```
 
@@ -341,6 +354,7 @@ crawl https://example.com --remove-links
 # Search
 search "python tutorials"
 search "Rezepte" --language de --max-results 5
+search "python tutorials" --providers searxng
 
 # Session capture for authenticated crawling
 crawl-capture --start-url https://example.com/login \
@@ -399,7 +413,7 @@ doc = await crawl_page_async("https://example.com", config=config)
 - `crawl4ai>=0.7.4` — crawler engine
 - `playwright>=1.40.0` — browser automation
 - `fastmcp>=3.4.3` — MCP server framework
-- `httpx>=0.27.0` — HTTP client for SearXNG
+- `httpx>=0.27.0` — HTTP client for the search providers (SearXNG, You.com)
 - `tldextract>=5.1.2` — domain parsing for site crawls
 
 ## License

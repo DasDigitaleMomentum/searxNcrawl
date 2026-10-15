@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Upgrade note:** existing SearXNG-only setups must set `SEARXNG_URL` explicitly; there is no `http://localhost:8888` default any more. `SEARXNG_URL` must not embed credentials (`https://user:pw@host` is rejected); use `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` instead.
+
 ### Added
+- Multi-provider search: CLI `search` and MCP `search` query every configured provider (SearXNG, You.com) in parallel and return one merged list (conservative URL dedup, round-robin, results found by several providers first). A partial failure still returns the other providers' results.
+- You.com provider, enabled by `YDC_API_KEY` (keyed API only; queries go to You.com, US). Requests use `POST /v1/search` with a JSON body. `safesearch` maps to `off`/`moderate`/`strict`; `language` maps to You.com's supported codes (`en-us` → `EN`; unsupported codes such as `zh` search without a language filter instead of failing with HTTP 422); pages beyond 10 return no You.com results; `content` falls back to the first snippet when the description is empty. HTTP 403 is reported as a missing key scope, separate from 401.
+- Provider selection per call: MCP `providers` parameter, CLI `--providers searxng,youcom`.
+- `providers` field on every result; the CLI markdown output shows it as a `**Sources:**` line.
 - `searxncrawl setup` registers the MCP server with the installed coding agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude Desktop) in one step. It shows each change, asks before applying it (`--yes` skips the prompt), backs up every file it touches, updates instead of duplicating on re-runs, and `setup --remove` unregisters again.
+
+### Changed
+- **Breaking:** no `SEARXNG_URL` default any more (code, `docker-compose.yml`, `.env.example`); SearXNG is active only when `SEARXNG_URL` is set. Setups that relied on `http://localhost:8888` must set it explicitly.
+- **Breaking:** `SEARXNG_URL` must be an http(s) URL without embedded credentials (`https://user:pw@host` and scheme-less values are rejected with a warning); use `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` instead, both or neither.
+- **Breaking:** unset `SEARCH_RESULT_FIELDS` now returns the normalized fields `title,url,content,publishedDate,providers`; the raw SearXNG payload passthrough ends, so fields such as `engine`, `score`, `suggestions`, `answers` are gone. Add `providers` to an existing `SEARCH_RESULT_FIELDS` to show attribution.
+- **Breaking:** the CLI "Related searches" line (from SearXNG `suggestions`) is removed.
+- Search errors are short per-provider reasons without secrets, URLs or response bodies (a SearXNG non-401 status no longer includes the response body).
+- HTTP 429 from a search provider is retried once when `Retry-After` is at most 5 s and attempts remain (MCP `max_retries`; the CLI makes a single attempt and never retries). Otherwise the reason ends with `retry after Ns` or `try again later`.
 
 ### Fixed
 - Every crawl failed with `CrawlerRunConfig.__init__() got an unexpected keyword argument 'flatten_shadow_dom'` when the code ran against Crawl4AI < 0.8.5 (e.g. a stale virtualenv). `flatten_shadow_dom` is now passed only if the installed Crawl4AI supports it; otherwise a warning is logged and shadow DOM content is skipped.

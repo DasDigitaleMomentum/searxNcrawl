@@ -27,7 +27,7 @@ This feature exposes crawling and search capabilities as MCP tools (`crawl`, `cr
 
 1. `mcp = FastMCP(...)` creates server and tool registry.
 2. `@mcp.tool` decorators register `crawl`, `crawl_site`, and `search` functions.
-3. Tool handlers call package APIs/SearXNG and route output through `_format_output`.
+3. Crawl tool handlers call package APIs and route output through `_format_output`; `search` calls `crawler.search_orchestrator` and returns its serialized envelope.
 4. `main()` parses transport arguments and normalizes comma-separated Host/Origin allowlists with `_parse_csv_allowlist` (`crawler/mcp_server.py:120`, `crawler/mcp_server.py:633`).
 5. In HTTP mode, explicitly configured Hosts reach FastMCP's request guard; configured CORS origins reach both FastMCP's Origin guard and Starlette CORS response middleware (`crawler/mcp_server.py:713`-`crawler/mcp_server.py:745`). The isolated stdio branch receives none of these HTTP-only arguments (`crawler/mcp_server.py:746`-`crawler/mcp_server.py:749`).
 
@@ -46,14 +46,14 @@ This feature exposes crawling and search capabilities as MCP tools (`crawl`, `cr
 - As an alternative to the CLI option, FastMCP reads `FASTMCP_HTTP_ALLOWED_HOSTS` in JSON-list format, for example `FASTMCP_HTTP_ALLOWED_HOSTS='["mcp.example.com"]'` (`.env.example:4`-`.env.example:5`). No searxNcrawl-specific Host environment variable is added.
 - `--cors-origins` is an HTTP-only, comma-separated Origin allowlist (`crawler/mcp_server.py:690`-`crawler/mcp_server.py:699`). The normalized list configures both FastMCP's request-time `allowed_origins` guard and Starlette `CORSMiddleware` response headers (`crawler/mcp_server.py:727`-`crawler/mcp_server.py:742`); configuring only response headers would not bypass the earlier guard.
 - Omitting the Host or Origin option passes no corresponding override, preserving FastMCP's secure defaults and allowing its environment configuration to resolve (`crawler/mcp_server.py:722`-`crawler/mcp_server.py:734`).
-- Environment: `SEARXNG_URL`, optional basic-auth credentials for search tool (`crawler/mcp_server.py:54`-`crawler/mcp_server.py:56`).
+- Environment for the search tool: `SEARXNG_URL` (no default) with optional basic-auth credentials (both or neither) and/or `YDC_API_KEY`; see [search-with-searxng](search-with-searxng.md).
 - Docker runtime uses `docker-compose.yml` with HTTP transport and configurable `MCP_PORT` (`docker-compose.yml:23`-`docker-compose.yml:32`).
 
 ## Edge Cases & Limitations
 
 - Tool responses are JSON strings for search and markdown/json strings for crawl tools; clients must parse according to expected tool output contract.
 - Invalid `output_format` values fallback to markdown in crawl tools (`crawler/mcp_server.py:224`-`crawler/mcp_server.py:228`, `crawler/mcp_server.py:298`-`crawler/mcp_server.py:301`).
-- Search behavior depends on external SearXNG availability.
+- Search depends on the configured external providers (SearXNG and/or You.com); with none configured, `search` returns an error.
 - FastMCP rejects untrusted public Hosts with HTTP 421 and untrusted Origins with HTTP 403 before MCP routing/CORS processing (`tests/test_cors.py:130`-`tests/test_cors.py:146`). Configure the externally observed Host/Origin values rather than assuming the bind address is sufficient.
 - `*` for Hosts or Origins is preserved only when explicitly supplied and admits arbitrary values (`tests/test_cors.py:35`-`tests/test_cors.py:68`, `tests/test_cors.py:148`-`tests/test_cors.py:168`). It weakens Host/Origin protection; exact allowlists are the safer deployment choice, and Docker has no wildcard default.
 

@@ -228,11 +228,10 @@ class TestSearxngExtraHeaders:
         monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", '{"X-N": 123}')
         assert env.searxng_extra_headers() == {"X-N": "123"}
 
-    def test_cli_and_mcp_server_import_helper(self) -> None:
-        """Both entry points should consume the shared helper."""
-        for module in ("cli", "mcp_server"):
-            source = (
-                Path(__file__).parent.parent / "crawler" / f"{module}.py"
-            ).read_text()
-            assert "from .env import load_config, searxng_extra_headers" in source
-            assert "searxng_extra_headers()" in source
+    def test_search_orchestrator_imports_helper(self) -> None:
+        """The SearXNG provider (used by CLI and MCP) should consume the helper."""
+        source = (
+            Path(__file__).parent.parent / "crawler" / "search_orchestrator.py"
+        ).read_text()
+        assert "from .env import searxng_extra_headers" in source
+        assert "searxng_extra_headers()" in source

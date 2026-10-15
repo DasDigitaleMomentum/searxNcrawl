@@ -4,7 +4,7 @@ Guidance for coding agents (Claude Code, Codex, Cursor, Copilot and others) work
 
 ## Project
 
-searxNcrawl is an MCP server, CLI and Python package for web search through SearXNG and/or You.com and Markdown crawling through Crawl4AI and Playwright. It is published on PyPI as `searxncrawl` and as `io.github.DasDigitaleMomentum/searxncrawl` in the MCP Registry.
+searxNcrawl is an MCP server, CLI and Python package for web search through SearXNG and/or You.com and Markdown crawling through Crawl4AI and Playwright. It is published on PyPI as `searxncrawl`; `server.json` describes it as `io.github.DasDigitaleMomentum/searxncrawl` for the MCP Registry.
 
 ## Layout
 

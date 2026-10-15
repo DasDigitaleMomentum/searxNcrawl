@@ -4,7 +4,7 @@
 # ///
 """Record-ready MCP client session: search, then crawl the top hit.
 
-Starts `uvx searxncrawl` over STDIO, exactly as an agent would, and prints the
+Starts `uvx searxncrawl` over STDIO, as an MCP client in an agent does, and prints the
 real tool results. Long Markdown is cut for display; the cut is labelled.
 Server logs go to searxncrawl-demo.log in the temp directory.
 

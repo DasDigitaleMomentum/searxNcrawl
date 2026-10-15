@@ -11,7 +11,7 @@ Crawl one or more web pages and extract their content.
 | `urls`         | `List[str]` | required     | URLs to crawl                                       |
 | `output_format` | `str`       | `"markdown"` | `"markdown"` or `"json"`                              |
 | `concurrency`  | `int`       | `3`          | Max concurrent crawls                               |
-| `timeout`      | `int`       | `30`         | Per-URL timeout in seconds (≥ 1)                  |
+| `timeout`      | `int`       | `15`         | Per-URL timeout in seconds (≥ 1)                  |
 | `remove_links` | `bool`      | `false`      | Remove all links from markdown output               |
 | `dedup_mode`   | `str`       | `"exact"`    | `"exact"` or `"off"`                                  |
 | `storage_state` | `str`       | `null`       | Path to Playwright storage state JSON for auth      |

@@ -18,7 +18,7 @@ The name in that comment and the `name` in `server.json` must match, and the rel
 
 ## Publish a version
 
-Publish after the release is on PyPI. The `io.github.DasDigitaleMomentum/` namespace requires a GitHub login by a member of the DasDigitaleMomentum organisation.
+Publish after the release is on PyPI. The `io.github.DasDigitaleMomentum/` namespace requires a GitHub login by an **owner** of the DasDigitaleMomentum organisation; ordinary membership is not enough.
 
 ```bash
 brew install mcp-publisher        # or download from github.com/modelcontextprotocol/registry/releases

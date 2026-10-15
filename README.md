@@ -66,7 +66,7 @@ You need [uv](https://docs.astral.sh/uv/) and, for the `search` tool, at least o
 uvx searxncrawl setup
 ```
 
-`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL, shows each config change and applies it only after you confirm. Every file it touches is backed up first, and `setup --remove` undoes it. More options are in [MCP server](docs/usage/mcp-server.md#register-with-searxncrawl-setup).
+`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL and, optionally, a You.com API key (hidden input, never printed), shows each config change and applies it only after you confirm. Every file it touches is backed up first, and `setup --remove` undoes it. More options are in [MCP server](docs/usage/mcp-server.md#register-with-searxncrawl-setup).
 
 **Or per agent**
 

@@ -19,7 +19,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
-    for var in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SEARXNG_URL"):
+    for var in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SEARXNG_URL", "YDC_API_KEY"):
         monkeypatch.delenv(var, raising=False)
 
     state = SimpleNamespace(home=tmp_path, path={"uvx": UVX}, calls=[], rc=0)
@@ -33,6 +33,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(
         "builtins.input", lambda prompt="": pytest.fail(f"unexpected prompt {prompt}")
     )
+    monkeypatch.setattr(setup.getpass, "getpass", lambda prompt="": "")
     return state
 
 
@@ -225,6 +226,87 @@ def test_cli_add_failure_is_reported(env):
     env.rc = 1
 
     assert setup.main(["--yes"]) == 1
+
+
+KEY = "sk-test-0123456789"
+
+
+def test_youcom_key_flag_is_stored_and_never_printed(env, capsys):
+    path = _cursor(env)
+    path.write_text(json.dumps({"mcpServers": {"searxncrawl": {
+        "command": UVX, "args": ["searxncrawl"], "env": {"YDC_API_KEY": "sk-old-999"},
+    }}}))  # fmt: skip
+
+    assert setup.main(["--yes", "--searxng-url", "http://s", "--ydc-api-key", KEY]) == 0
+
+    entry = json.loads(path.read_text())["mcpServers"]["searxncrawl"]
+    assert entry["env"] == {"SEARXNG_URL": "http://s", "YDC_API_KEY": KEY}
+    out = capsys.readouterr().out
+    assert KEY not in out and "sk-old-999" not in out
+    assert '"YDC_API_KEY": "<hidden>"' in out
+    assert "stored in plain text" in out
+
+
+def test_youcom_key_is_masked_in_cli_commands_and_agent_output(env, capsys, monkeypatch):
+    env.path["claude"] = "/bin/claude"
+
+    def echoing_run(cmd, **kwargs):
+        env.calls.append(cmd)
+        return SimpleNamespace(returncode=0, stdout=f"Added with env {cmd[-3:]}", stderr="")
+
+    monkeypatch.setattr(setup.subprocess, "run", echoing_run)
+
+    assert setup.main(["--yes", "--ydc-api-key", KEY]) == 0
+
+    assert ["-e", f"YDC_API_KEY={KEY}"] == env.calls[1][6:8]
+    out = capsys.readouterr().out
+    assert KEY not in out
+    assert "YDC_API_KEY=<hidden>" in out
+
+
+def test_youcom_key_prompt_is_hidden_and_reuses_env(env, monkeypatch):
+    path = _cursor(env)
+    monkeypatch.setenv("YDC_API_KEY", KEY)
+    prompts = []
+    monkeypatch.setattr(setup.getpass, "getpass", lambda prompt="": prompts.append(prompt) or "")
+    answers = iter(["", "y"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+
+    assert setup.main([]) == 0
+
+    assert len(prompts) == 1 and KEY not in prompts[0] and "keep $YDC_API_KEY" in prompts[0]
+    entry = json.loads(path.read_text())["mcpServers"]["searxncrawl"]
+    assert entry["env"] == {"YDC_API_KEY": KEY}
+
+
+def test_youcom_key_typed_at_prompt(env, monkeypatch):
+    path = _cursor(env)
+    monkeypatch.setattr(setup.getpass, "getpass", lambda prompt="": f"  {KEY}  ")
+    answers = iter(["http://s", "y"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+
+    assert setup.main([]) == 0
+    entry = json.loads(path.read_text())["mcpServers"]["searxncrawl"]
+    assert entry["env"] == {"SEARXNG_URL": "http://s", "YDC_API_KEY": KEY}
+
+
+def test_yes_uses_env_key_without_prompting(env, monkeypatch):
+    path = _cursor(env)
+    monkeypatch.setenv("YDC_API_KEY", KEY)
+    monkeypatch.setattr(
+        setup.getpass, "getpass", lambda prompt="": pytest.fail("unexpected key prompt")
+    )
+
+    assert setup.main(["--yes"]) == 0
+    entry = json.loads(path.read_text())["mcpServers"]["searxncrawl"]
+    assert entry["env"] == {"YDC_API_KEY": KEY}
+
+
+def test_warns_when_no_search_provider(env, capsys):
+    _cursor(env)
+
+    assert setup.main(["--yes"]) == 0
+    assert "no search provider configured" in capsys.readouterr().out
 
 
 def test_mcp_server_entry_point_dispatches_setup(monkeypatch):

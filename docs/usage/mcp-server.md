@@ -4,11 +4,14 @@ One-line setup commands for Claude Code, Codex, Cursor and VS Code are in the [R
 
 ## Register with `searxncrawl setup`
 
-`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL (suggesting `$SEARXNG_URL`), shows the exact change for each agent and applies it only after you confirm. It uses the agent's own `mcp add` CLI where one exists and otherwise edits the agent's JSON config. Every file it touches is backed up next to the original as `<file>.searxncrawl-backup-<timestamp>`. Re-running updates the entry instead of adding a second one.
+`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL (suggesting `$SEARXNG_URL`) and, optionally, a You.com API key (hidden input, suggesting `$YDC_API_KEY`), shows the exact change for each agent and applies it only after you confirm. It uses the agent's own `mcp add` CLI where one exists and otherwise edits the agent's JSON config. Every file it touches is backed up next to the original as `<file>.searxncrawl-backup-<timestamp>`. Re-running updates the entry instead of adding a second one.
+
+The You.com key is written in plain text into each agent's MCP config (that is where agents read it from), but `setup` never prints it: commands, diffs and agent CLI output show `<hidden>` instead. With `--yes` and no `--ydc-api-key`, `setup` uses `$YDC_API_KEY` if it is set. If neither a SearXNG URL nor a You.com key is given, `setup` warns that search has no provider.
 
 ```bash
 uvx searxncrawl setup
 uvx searxncrawl setup --yes --searxng-url http://your-searxng:8888   # non-interactive
+uvx searxncrawl setup --yes --ydc-api-key "$YDC_API_KEY"             # You.com only
 uvx searxncrawl setup --agent cursor --agent vscode                  # only these agents
 uvx searxncrawl setup --remove                                       # unregister again
 ```

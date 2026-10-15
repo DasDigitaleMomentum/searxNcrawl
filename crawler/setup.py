@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import getpass
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -22,6 +24,11 @@ from datetime import datetime
 from pathlib import Path
 
 SERVER_NAME = "searxncrawl"
+# Env values never shown in setup output (commands, diffs, agent CLI output).
+SECRET_ENV = ("YDC_API_KEY",)
+_SECRET_ASSIGNMENT = re.compile(
+    r"(\b(?:%s)\b\"?\s*[:=]\s*\"?)[^\"\s,}]+" % "|".join(SECRET_ENV)
+)
 
 
 @dataclass(frozen=True)
@@ -167,6 +174,14 @@ def backup(path: Path) -> Path | None:
     return dest
 
 
+def _hide(text: str, env: dict[str, str]) -> str:
+    """Mask secret env values, including ones already in a config being replaced."""
+    for key in SECRET_ENV:
+        if env.get(key):
+            text = text.replace(env[key], "<hidden>")
+    return _SECRET_ASSIGNMENT.sub(r"\1<hidden>", text)
+
+
 def _confirm(question: str, assume_yes: bool) -> bool:
     if assume_yes:
         return True
@@ -183,7 +198,7 @@ def _apply(agent: Agent, env: dict[str, str], args: argparse.Namespace) -> bool:
     if agent.cli:
         commands = cli_commands(agent, env, args.remove)
         for cmd in commands:
-            print(f"  $ {shlex.join(cmd)}")
+            print(f"  $ {_hide(shlex.join(cmd), env)}")
         if not _confirm(f"{verb} {agent.name}?", args.yes):
             print("  skipped")
             return True
@@ -196,7 +211,7 @@ def _apply(agent: Agent, env: dict[str, str], args: argparse.Namespace) -> bool:
         assert result is not None
         output = (result.stdout + result.stderr).strip()
         if output:
-            print("  " + output.replace("\n", "\n  "))
+            print("  " + _hide(output, env).replace("\n", "\n  "))
         return result.returncode == 0 or args.remove
 
     try:
@@ -214,7 +229,7 @@ def _apply(agent: Agent, env: dict[str, str], args: argparse.Namespace) -> bool:
         fromfile=f"{agent.config} (current)",
         tofile=f"{agent.config} (new)",
     )
-    print("".join(diff), end="")
+    print(_hide("".join(diff), env), end="")
     if not _confirm(f"{verb} {agent.name}?", args.yes):
         print("  skipped")
         return True
@@ -242,6 +257,12 @@ def main(argv: list[str] | None = None) -> int:
         "--searxng-url",
         help="SearXNG URL to store in the agent configs (default: ask, "
         "suggesting $SEARXNG_URL)",
+    )
+    parser.add_argument(
+        "--ydc-api-key",
+        help="You.com API key to store in the agent configs (default: ask with "
+        "hidden input, suggesting $YDC_API_KEY). Stored in plain text there; "
+        "never printed by setup",
     )
     parser.add_argument(
         "--agent",
@@ -273,6 +294,25 @@ def main(argv: list[str] | None = None) -> int:
                     pass
         if url:
             env["SEARXNG_URL"] = url
+        key = args.ydc_api_key
+        if key is None:
+            key = os.environ.get("YDC_API_KEY", "")
+            if not args.yes:
+                hint = "keep $YDC_API_KEY" if key.strip() else "none"
+                try:
+                    key = getpass.getpass(
+                        f"You.com API key, optional, input hidden [{hint}]: "
+                    ).strip() or key
+                except EOFError:
+                    pass
+        if key.strip():
+            env["YDC_API_KEY"] = key.strip()
+            print("note: YDC_API_KEY is stored in plain text in each agent's MCP config")
+        if not env:
+            print(
+                "warning: no search provider configured; search fails until "
+                "SEARXNG_URL or YDC_API_KEY is set"
+            )
         if not shutil.which("uvx"):
             print("warning: uvx not found on PATH; install uv so agents can start it")
 

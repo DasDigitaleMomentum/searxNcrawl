@@ -19,6 +19,7 @@ searxNcrawl is an MCP server, CLI and Python package for web search through Sear
 | `crawler/document.py`, `builder.py`, `references.py` | `CrawledDocument` model and Markdown/JSON output |
 | `crawler/auth.py`, `session_capture.py` | Authenticated crawling and session capture |
 | `crawler/browser_setup.py` | Automatic Chromium install |
+| `crawler/setup.py` | `searxncrawl setup`: registers the server with installed coding agents |
 | `tests/` | pytest suite |
 | `docs/usage/` | User guides linked from the README |
 | `docs/modules/`, `docs/features/` | Architecture notes per module and feature |

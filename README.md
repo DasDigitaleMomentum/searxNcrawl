@@ -24,6 +24,12 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="An MCP client starts uvx searxncrawl, calls search for crawl4ai quick start, then crawls the top result and receives clean Markdown" width="100%">
+  <br>
+  <sub>A real MCP client session (fastmcp) against <code>uvx searxncrawl</code> 0.31.0 and a local SearXNG: <code>search</code>, then <code>crawl</code> the top hit into Markdown. Output is shortened for display. Reproduce it with <a href="docs/assets/demo/demo.tape"><code>docs/assets/demo/</code></a>.</sub>
+</p>
+
 **searxNcrawl** is an open-source MCP server and CLI toolkit that gives AI agents web search and clean Markdown crawling, built on [Crawl4AI](https://github.com/unclecode/crawl4ai). Search queries the configured providers, [SearXNG](https://github.com/searxng/searxng) and/or [You.com](https://you.com), in parallel and merges the results. It runs on your own hardware, needs no API key with SearXNG and succeeds `searxng-mcp`.
 
 <table>
@@ -45,376 +51,193 @@ SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
 
 <!-- mcp-name: io.github.DasDigitaleMomentum/searxncrawl -->
 
-## Quick Start
+## Quick start
 
-### Register with your coding agents (one step)
+You need [uv](https://docs.astral.sh/uv/) and, for the `search` tool, at least one search provider: a SearXNG instance with JSON output enabled and/or a You.com API key (`YDC_API_KEY`). No SearXNG yet? [Start one with Docker in a minute](docs/usage/installation.md#run-searxng-locally). Crawling works without either.
+
+> [!NOTE]
+> `searxncrawl setup` and the You.com provider are merged but not yet released; PyPI 0.31.0 searches SearXNG only. Until the next release, run the development version with `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl`.
+
+### Add it to your agent
+
+**One step for every agent on your machine**
 
 ```bash
 uvx searxncrawl setup
 ```
 
-`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL (suggesting `$SEARXNG_URL`), shows the exact change for each agent and applies it only after you confirm. It uses the agent's own `mcp add` CLI where one exists and otherwise edits the agent's JSON config. Every file it touches is backed up next to the original as `<file>.searxncrawl-backup-<timestamp>`. Re-running updates the entry instead of adding a second one.
+`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL, shows each config change and applies it only after you confirm. Every file it touches is backed up first, and `setup --remove` undoes it. More options are in [MCP server](docs/usage/mcp-server.md#register-with-searxncrawl-setup).
+
+**Or per agent**
+
+<p>
+  <a href="https://cursor.com/en/install-mcp?name=searxncrawl&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJzZWFyeG5jcmF3bCJdLCJlbnYiOnsiU0VBUlhOR19VUkwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODgifX0%3D"><img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add searxNcrawl to Cursor" height="32"></a>
+  <a href="https://insiders.vscode.dev/redirect/mcp/install?name=searxncrawl&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22searxncrawl%22%5D%2C%22env%22%3A%7B%22SEARXNG_URL%22%3A%22http%3A%2F%2Flocalhost%3A8888%22%7D%7D"><img src="https://img.shields.io/badge/VS_Code-Install_searxNcrawl-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install searxNcrawl in VS Code" height="32"></a>
+</p>
+
+The buttons and commands below assume SearXNG at `http://localhost:8888`; change `SEARXNG_URL` if yours runs elsewhere, or add `YDC_API_KEY` for You.com.
+
+**Claude Code**
 
 ```bash
-uvx searxncrawl setup --yes --searxng-url http://your-searxng:8888   # non-interactive
-uvx searxncrawl setup --agent cursor --agent vscode                  # only these agents
-uvx searxncrawl setup --remove                                       # unregister again
+claude mcp add searxncrawl --env SEARXNG_URL=http://localhost:8888 -- uvx searxncrawl
 ```
 
-Restart the agents afterwards. Prefer to run the server yourself? Pick your setup:
-
-### Docker Compose
-
-MCP server with Playwright/Chromium, ready in one command. Search needs at least one provider (a SearXNG instance and/or a You.com API key).
+**Codex**
 
 ```bash
-cp .env.example .env          # set SEARXNG_URL and/or YDC_API_KEY
-docker compose up --build
+codex mcp add searxncrawl --env SEARXNG_URL=http://localhost:8888 -- uvx searxncrawl
 ```
 
-➜ MCP server at `http://localhost:9555/mcp`
-
-### uvx (no clone)
-
-Run the MCP server from [PyPI](https://pypi.org/project/searxncrawl/), no clone or virtualenv. Chromium is downloaded automatically on the first crawl.
+**VS Code**
 
 ```bash
-SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
+code --add-mcp '{"name":"searxncrawl","command":"uvx","args":["searxncrawl"],"env":{"SEARXNG_URL":"http://localhost:8888"}}'
 ```
 
-The latest development version runs straight from GitHub with `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl`.
-
-### pip (standalone)
-
-CLI tools, Python API, and MCP server. Search needs SEARXNG_URL and/or YDC_API_KEY.
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-playwright install chromium
-```
-
-### uv (standalone)
-
-Same capabilities as pip.
-
-```bash
-uv sync
-uv run playwright install chromium
-```
-
-### What you get
-
-| Feature                 | Docker Compose | pip / uv  |
-| ----------------------- | -------------- | --------- |
-| MCP Server (STDIO)      | —              | ✅        |
-| MCP Server (HTTP)       | ✅             | ✅        |
-| Web Crawl               | ✅             | ✅        |
-| Web Search              | ✅¹            | ✅¹       |
-| CLI Tools               | via `exec`²    | ✅        |
-| Python API              | —              | ✅        |
-| CORS (HTTP)             | ✅             | ✅        |
-
-¹ Requires at least one search provider (SearXNG instance and/or You.com API key). ² `docker compose exec searxncrawl crawl ...`
-
-## Features
-
-### Crawling
-- Single page, multi-page, and **site crawling** (DFS with depth/page limits)
-- Production-tested extraction config optimized for documentation sites
-- Configurable timeouts with graceful error handling
-
-### Content Quality
-- **Markdown deduplication** — `exact` (default) removes repeated blocks, `off` disables it
-- **Link removal** — strip all links for cleaner LLM context (`--remove-links`)
-- **Dedup guardrails** — non-destructive metadata signals when removal is unusually aggressive
-
-### Web Search
-- Providers: SearXNG (self-hosted metasearch) and You.com (API key), each active only when configured
-- All configured providers queried in parallel; results merged, deduplicated and attributed per provider
-- Configurable language, time range, page; categories, engines and safe search for SearXNG
-
-### MCP Server
-- **STDIO transport** — for MCP harnesses (Zed, opencode, VS Code, Claude Code, etc.)
-- **HTTP transport** — for remote access and browser clients
-- **CORS support** — configurable origins for browser-based MCP clients
-- Noise-free startup with UTF-8 encoding (cross-platform, incl. Windows)
-
-### CLI Tools
-- `crawl` — crawl pages from the command line
-- `search` — search the web via the configured providers (SearXNG, You.com)
-- `crawl-capture` — session capture for authenticated crawling
-
-## Installation
-
-### Docker Compose
-
-The Compose stack includes searxNcrawl + Playwright/Chromium. Search providers (a SearXNG instance and/or a You.com API key) are configured separately.
-
-```bash
-cp .env.example .env
-# Edit .env: set SEARXNG_URL and/or YDC_API_KEY
-docker compose up --build
-```
-
-| Variable    | Default                   | Description                                                   |
-| ----------- | ------------------------- | ------------------------------------------------------------- |
-| `MCP_PORT`                  | `9555`                    | MCP server HTTP port                                          |
-| `LOG_LEVEL`                 | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `PLAYWRIGHT_AUTO_INSTALL`   | `true`                    | Download Playwright's Chromium automatically before the first browser launch if it is missing. Set to `false` where browsers are provisioned separately |
-| `FASTMCP_HTTP_ALLOWED_HOSTS` | (FastMCP secure defaults) | JSON list of trusted HTTP Host headers, for example `["mcp.example.com"]` |
-
-The MCP server is available at `http://localhost:9555/mcp`.
-
-### pip
-
-```bash
-cd searxNcrawl
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-playwright install chromium
-```
-
-### uv
-
-```bash
-cd searxNcrawl
-uv sync
-uv run playwright install chromium
-```
-
-### Search providers
-
-`search` (MCP tool and CLI command) queries every configured provider in parallel. A provider is active only when it is configured; with none configured, search returns an error naming `SEARXNG_URL` and `YDC_API_KEY`.
-
-- **SearXNG** — active when `SEARXNG_URL` is a valid http(s) URL without embedded credentials. There is no default URL. The instance needs **JSON output enabled** (`search.formats` in `settings.yml`); self-hosting is recommended over public instances (rate limits). Basic auth credentials are optional: set both or neither.
-- **You.com** — active when `YDC_API_KEY` is set (non-empty). Requests send the key in the `X-API-Key` header and the User-Agent `youdotcom-integration/dasdigitalemomentum-searxncrawl`. You.com queries go to You.com in the US.
-
-**How results are combined:**
-
-- `providers` (MCP, e.g. `["searxng"]`) or `--providers searxng,youcom` (CLI) narrows a call to a subset of the configured providers; unknown or unconfigured names return an error. Default: all configured providers.
-- Results are merged round-robin with conservative URL dedup. Results returned by several providers come first, and every result lists its sources in `providers`. The list is capped at `max_results` (1–50).
-- `language`, `time_range`, `safesearch` and `pageno` apply to both providers; `categories` and `engines` are SearXNG only. For You.com, `language` is mapped to its supported codes (e.g. `en-us` → `EN`; unsupported codes such as `zh` search without a language filter), and pages beyond 10 return no You.com results.
-- If some providers fail, the results of the others are returned (the failure is logged as a warning). If all selected providers fail, search returns an error with a short reason per provider (no secrets, URLs or response bodies), e.g. `youcom: API key rejected, check YDC_API_KEY`.
-
-**Environment variables:**
-
-| Variable               | Example / Recommended                          | Description                                                                                                  |
-| ---------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `SEARXNG_URL`          | (none)                                         | SearXNG instance URL, e.g. `http://localhost:8888`; enables SearXNG                                          |
-| `SEARXNG_USERNAME`     | (none)                                         | Optional basic auth user (set both or neither)                                                               |
-| `SEARXNG_PASSWORD`     | (none)                                         | Optional basic auth pass (set both or neither)                                                               |
-| `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |
-| `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate,providers`    | Comma-separated result fields. Unset = all fields. Available: title, url, content, publishedDate, providers  |
-
-Example `.env`:
-```bash
-SEARXNG_URL=http://localhost:8888
-# YDC_API_KEY=your-you.com-api-key
-SEARCH_RESULT_FIELDS=title,url,content,publishedDate,providers
-LOG_LEVEL=INFO
-```
-
-**Config file search order** (CLI tools only):
-
-1. `./.env` — current directory
-2. `~/.config/searxncrawl/.env` — user config
-
-If no `.env` exists, `.env.example` is auto-copied to the user config path.
-
-## Usage
-
-### MCP Server
-
-#### Start the server
-
-```bash
-# STDIO transport (for MCP harnesses)
-python -m crawler.mcp_server
-
-# HTTP transport
-python -m crawler.mcp_server --transport http --port 8000
-
-# HTTP exposed through a specific public hostname
-python -m crawler.mcp_server --transport http --host 0.0.0.0 --allowed-hosts "mcp.example.com"
-
-# HTTP with CORS
-python -m crawler.mcp_server --transport http --allowed-hosts "mcp.example.com" --cors-origins "https://app.example.com"
-
-# Docker (HTTP only)
-docker compose up --build
-```
-
-#### MCP client configuration
-
-`uvx searxncrawl setup` writes the configuration below for you (see [Quick Start](#quick-start)). To do it by hand:
-
-**With uvx (no clone, no venv):**
+**Cursor, Claude Desktop, Zed, opencode and other MCP clients**
 
 ```json
 {
   "mcpServers": {
-    "crawler": {
+    "searxncrawl": {
       "command": "uvx",
       "args": ["searxncrawl"],
-      "env": { "SEARXNG_URL": "http://your-searxng:8888" }
+      "env": { "SEARXNG_URL": "http://localhost:8888" }
     }
   }
 }
 ```
 
-The first crawl downloads Playwright's Chromium once (about 550 MB on disk); later starts reuse it. On Linux hosts without the browser's system libraries, run `uvx --from searxncrawl playwright install --with-deps chromium` once.
+The first crawl downloads Playwright's Chromium once (about 550 MB). For Docker, HTTP transport and other setups see [Installation](docs/usage/installation.md) and [MCP server](docs/usage/mcp-server.md).
 
-**Python with venv:**
+### Ask your agent
 
-```json
-{
-  "mcpServers": {
-    "crawler": {
-      "command": "python",
-      "args": ["-m", "crawler.mcp_server"],
-      "cwd": "/path/to/searxNcrawl",
-      "env": { "SEARXNG_URL": "http://your-searxng:8888" }
-    }
-  }
-}
+```text
+Search for the Crawl4AI quick start, crawl the official page and summarise
+how to run a first crawl.
 ```
 
-**With uv (no manual venv):**
+Your agent calls `search`, picks a result and calls `crawl`. It gets back clean Markdown instead of raw HTML.
 
-```json
-{
-  "mcpServers": {
-    "crawler": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/searxNcrawl", "python", "-m", "crawler.mcp_server"],
-      "env": { "SEARXNG_URL": "http://your-searxng:8888" }
-    }
-  }
-}
-```
-
-**Docker (HTTP endpoint):**
-
-```json
-{
-  "mcpServers": {
-    "crawler": {
-      "url": "http://localhost:9555/mcp"
-    }
-  }
-}
-```
-
-#### CORS
-
-FastMCP validates the HTTP `Host` header independently of the address on which
-the server listens. For remote access, allow the exact externally visible Host
-header with a comma-separated CLI value:
+### Use the terminal
 
 ```bash
-crawl-mcp --transport http --host 0.0.0.0 --allowed-hosts "mcp.example.com,mcp.internal.example"
+uvx --from searxncrawl crawl https://modelcontextprotocol.io/docs/getting-started/intro
+SEARXNG_URL=http://localhost:8888 uvx --from searxncrawl search "model context protocol" --max-results 5
 ```
 
-Alternatively, use FastMCP's environment setting. It uses JSON-list syntax:
+## How it works
 
-```bash
-FASTMCP_HTTP_ALLOWED_HOSTS='["mcp.example.com"]' crawl-mcp --transport http --host 0.0.0.0
+```mermaid
+flowchart LR
+    agent["AI agent<br/>Claude Code · Codex<br/>Cursor · VS Code"]
+    server["searxNcrawl<br/>MCP server"]
+    searxng["SearXNG (your instance)<br/>and/or You.com API"]
+    browser["Crawl4AI +<br/>Playwright Chromium"]
+    results["Merged results<br/>attributed per provider"]
+    markdown["Deduplicated<br/>Markdown or JSON"]
+
+    agent -- "MCP · STDIO or HTTP" --> server
+    server -- "search" --> searxng --> results
+    server -- "crawl · crawl_site" --> browser --> markdown
 ```
 
-Browser Origin validation and CORS response headers are separate from Host
-validation. `--cors-origins` configures both FastMCP's Origin guard and the CORS
-middleware using the same normalized, comma-separated values:
+Results return to the agent as the tool response. The same functions are available as CLI commands and as a Python API.
 
-```bash
-crawl-mcp --transport http --cors-origins "http://localhost:3000,https://myapp.com"
-crawl-mcp --transport http --cors-origins "*"   # all origins — local dev only
-```
+searxNcrawl exposes three MCP tools:
 
-Omitting either allowlist preserves FastMCP's secure defaults (and permits the
-upstream environment setting to apply). A value of `*` for Hosts or Origins is
-an explicit opt-in to broad access and should only be used when that security
-trade-off is intentional. Without `--cors-origins`, no CORS headers are sent.
+| Tool | What it does |
+| --- | --- |
+| `search` | Queries the configured providers (SearXNG, You.com) in parallel and returns one merged, deduplicated list with the source of each result. Filters: language, time range, safe search, paging; categories and engines for SearXNG. |
+| `crawl` | Renders one or many URLs in Chromium and returns Markdown or JSON with metadata and references. |
+| `crawl_site` | Follows links from a seed URL within depth, page and timeout limits, tuned for documentation sites. |
 
-### CLI Tools
+Both crawl tools remove repeated blocks such as navigation and footers (`dedup_mode="exact"`), can strip links for a smaller context (`remove_links`), and accept a Playwright `storage_state` for pages behind a login. Full parameters are in the [MCP tools reference](docs/usage/mcp-tools.md).
 
-After `pip install -e .` (or `uv sync`), the following commands are available:
+## Why searxNcrawl
 
-```bash
-# Crawl a page
-crawl https://docs.example.com
+Hosted search and crawl APIs are quick to start with, but every call goes through someone else's service and is billed per request or credit. searxNcrawl runs where your agent runs.
 
-# Site crawl with depth limit
-crawl https://docs.example.com --site --max-depth 2 --max-pages 10 -o docs/
+|  | searxNcrawl | [Firecrawl](https://github.com/firecrawl/firecrawl) | [Tavily](https://github.com/tavily-ai/tavily-mcp) | [Exa](https://github.com/exa-labs/exa-mcp-server) |
+| --- | --- | --- | --- | --- |
+| Search and crawl run on your hardware | ✅ Python package or Docker; You.com queries go to You.com | ✅ Self-host stack (Docker Compose), or hosted API | ❌ Hosted API | ❌ Hosted API |
+| API key | Not needed with SearXNG; You.com needs one | Needed for the hosted API | Needed | Optional, anonymous use is rate-limited |
+| Cost per call | None with SearXNG; You.com per its plans | Hosted plans; self-hosting is free | Hosted plans | Hosted plans |
+| Search backend | Your SearXNG (the engines you enable) and/or You.com | Firecrawl search API | Tavily's search API | Exa's search index |
+| Licence | MIT | AGPL-3.0 | MCP server MIT, API proprietary | MCP server MIT, API proprietary |
+| Firecrawl-compatible API | Planned | — | — | — |
 
-# Clean output (no links)
-crawl https://example.com --remove-links
+Where the others are a better fit: if you do not want to run SearXNG and a browser yourself, a hosted API is less work, and Exa's semantic search index or Firecrawl's extraction features go beyond what searxNcrawl does today. Comparison based on each project's public README in October 2026; corrections are welcome. Firecrawl is a trademark of its owner; searxNcrawl is not affiliated with it.
 
-# Search
-search "python tutorials"
-search "Rezepte" --language de --max-results 5
-search "python tutorials" --providers searxng
+## FAQ
 
-# Session capture for authenticated crawling
-crawl-capture --start-url https://example.com/login \
-    --completion-url 'https://example.com/dashboard.*' \
-    --output ./state.json
-```
+<details>
+<summary><b>Do I need SearXNG?</b></summary>
 
-See [Session Capture](docs/usage/session-capture.md) for the full `crawl-capture` guide.
+Only for the `search` tool, and only if you do not use You.com (`YDC_API_KEY`). `crawl` and `crawl_site` work without any search provider. SearXNG must have JSON output enabled (`search.formats` in `settings.yml`); most public instances turn it off or rate-limit, so run your own. [Installation](docs/usage/installation.md#run-searxng-locally) has a Docker one-liner.
+</details>
 
-### Python API
+<details>
+<summary><b>Does it handle JavaScript-heavy pages?</b></summary>
 
-```python
-from crawler import crawl_page, crawl_page_async, crawl_site, crawl_site_async
+Yes. Pages are rendered in Playwright's Chromium through Crawl4AI before they are converted to Markdown, so client-side content is captured.
+</details>
 
-# Single page
-doc = await crawl_page_async("https://docs.example.com/intro", dedup_mode="exact")
-print(doc.markdown)
+<details>
+<summary><b>Can it crawl pages behind a login?</b></summary>
 
-# Site crawl
-result = crawl_site("https://docs.example.com", max_depth=2, max_pages=10)
-for doc in result.documents:
-    print(f"{doc.status}: {doc.final_url}")
+Yes. Capture a session once with `crawl-capture`, then pass the saved `storage_state` file to `crawl` or `crawl_site`. See [Session capture](docs/usage/session-capture.md).
+</details>
 
-# Authenticated crawl
-doc = await crawl_page_async(
-    "https://example.com/private",
-    auth={"storage_state": "/path/to/state.json"},
-)
-```
+<details>
+<summary><b>Can I run it remotely or share it with a team?</b></summary>
 
-## Reference
+Yes. Start it with `--transport http` or use the Docker Compose stack, then point your MCP clients at `http://<host>:9555/mcp`. Host and Origin allowlists guard the endpoint; see [MCP server](docs/usage/mcp-server.md#http-host-and-cors-guards).
+</details>
 
-- **[MCP Tools](docs/usage/mcp-tools.md)** — full parameter reference for `crawl`, `crawl_site`, `search`
-- **[Output Formats](docs/usage/output-formats.md)** — Markdown and JSON output structure, including `CrawledDocument`
-- **[Session Capture](docs/usage/session-capture.md)** — manual login flow and CDP session export
+<details>
+<summary><b>Why is the first crawl slow?</b></summary>
 
-## Configuration
+The first crawl downloads Playwright's Chromium (about 550 MB on disk). Later runs reuse it. Set `PLAYWRIGHT_AUTO_INSTALL=false` where browsers are provisioned separately.
+</details>
 
-Default config is optimized for documentation sites. Customize via overrides:
+<details>
+<summary><b>I used <code>searxng-mcp</code>. What changed?</b></summary>
 
-```python
-from crawler import build_markdown_run_config, RunConfigOverrides
+searxNcrawl succeeds `searxng-mcp`. It keeps SearXNG search and adds page and site crawling, Markdown deduplication, authenticated crawls and an HTTP transport.
+</details>
 
-config = build_markdown_run_config(
-    RunConfigOverrides(
-        delay_before_return_html=1.0,
-        mean_delay=1.0,
-        scan_full_page=True,
-    )
-)
-doc = await crawl_page_async("https://example.com", config=config)
-```
+<details>
+<summary><b>Is there a hosted version?</b></summary>
 
-## Dependencies
+Not yet. searxNcrawl Cloud is planned; see the [roadmap](#roadmap).
+</details>
 
-- `crawl4ai>=0.7.4` — crawler engine
-- `playwright>=1.40.0` — browser automation
-- `fastmcp>=3.4.3` — MCP server framework
-- `httpx>=0.27.0` — HTTP client for the search providers (SearXNG, You.com)
-- `tldextract>=5.1.2` — domain parsing for site crawls
+## Roadmap
+
+- **Firecrawl-compatible API** (planned): use searxNcrawl as a drop-in backend for tools built against the Firecrawl API.
+- **searxNcrawl Cloud** (planned): a managed endpoint for teams that do not want to run SearXNG and a browser. [Details and waitlist](https://www.searxncrawl.io/#cloud).
+
+Ideas and votes are welcome in [Discussions](https://github.com/DasDigitaleMomentum/searxNcrawl/discussions).
+
+## Documentation
+
+| Guide | Contents |
+| --- | --- |
+| [Installation](docs/usage/installation.md) | uvx, Docker Compose, pip, uv, search providers and environment variables |
+| [MCP server](docs/usage/mcp-server.md) | STDIO and HTTP transports, client configuration, Host and CORS guards |
+| [MCP tools](docs/usage/mcp-tools.md) | Parameters for `crawl`, `crawl_site` and `search` |
+| [CLI](docs/usage/cli.md) | `crawl`, `search` and `crawl-capture` |
+| [Python API](docs/usage/python-api.md) | `crawl_page`, `crawl_site` and crawler configuration overrides |
+| [Output formats](docs/usage/output-formats.md) | Markdown and JSON structure, `CrawledDocument` |
+| [Session capture](docs/usage/session-capture.md) | Authenticated crawling with a saved browser session |
+| [MCP Registry](docs/registry.md) | `server.json` and the publish steps |
+| [Architecture](docs/overview.md) | Modules and features for contributors |
+
+## Contributing
+
+Bug reports, feature ideas and pull requests are welcome. Read the [contributing guide](https://github.com/DasDigitaleMomentum/.github/blob/main/.github/CONTRIBUTING.md) and open an [issue](https://github.com/DasDigitaleMomentum/searxNcrawl/issues/new/choose) first for larger changes. Coding agents find project conventions in [AGENTS.md](AGENTS.md). Report vulnerabilities privately as described in the [security policy](https://github.com/DasDigitaleMomentum/.github/blob/main/.github/SECURITY.md).
 
 ## License
 

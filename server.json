@@ -1,0 +1,52 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.DasDigitaleMomentum/searxncrawl",
+  "title": "searxNcrawl",
+  "description": "Self-hosted web search via SearXNG and clean Markdown crawling via Crawl4AI. No API key.",
+  "websiteUrl": "https://www.searxncrawl.io/",
+  "repository": {
+    "url": "https://github.com/DasDigitaleMomentum/searxNcrawl",
+    "source": "github"
+  },
+  "version": "0.31.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "searxncrawl",
+      "version": "0.31.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SEARXNG_URL",
+          "description": "URL of your SearXNG instance with JSON output enabled (default: http://localhost:8888)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "SEARXNG_USERNAME",
+          "description": "Optional basic auth user for SearXNG",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "SEARXNG_PASSWORD",
+          "description": "Optional basic auth password for SearXNG",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SEARCH_RESULT_FIELDS",
+          "description": "Comma-separated result fields, e.g. title,url,content,publishedDate (unset = all fields)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

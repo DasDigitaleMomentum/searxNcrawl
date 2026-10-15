@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider selection per call: MCP `providers` parameter, CLI `--providers searxng,youcom`.
 - `providers` field on every result; the CLI markdown output shows it as a `**Sources:**` line.
 - `searxncrawl setup` registers the MCP server with the installed coding agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude Desktop) in one step. It shows each change, asks before applying it (`--yes` skips the prompt), backs up every file it touches, updates instead of duplicating on re-runs, and `setup --remove` unregisters again.
+- `server.json` for the official MCP Registry (`io.github.DasDigitaleMomentum/searxncrawl`). The release workflow now fails if its versions differ from `pyproject.toml`. See `docs/registry.md`.
 
 ### Changed
 - **Breaking:** no `SEARXNG_URL` default any more (code, `docker-compose.yml`, `.env.example`); SearXNG is active only when `SEARXNG_URL` is set. Setups that relied on `http://localhost:8888` must set it explicitly.

@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Awaitable, Callable, Optional, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
@@ -23,9 +26,16 @@ SEARXNG = "searxng"
 YOUCOM = "youcom"
 PROVIDER_ORDER = (SEARXNG, YOUCOM)
 _REQUEST_TIMEOUT_SECONDS = 30.0
+_MAX_RETRY_AFTER_SECONDS = 5.0
 _VALID_TIME_RANGES = {"day", "week", "month", "year"}
 YOUCOM_URL = "https://ydc-index.io/v1/search"
 YOUCOM_USER_AGENT = "youdotcom-integration/dasdigitalemomentum-searxncrawl"
+_YOUCOM_LANGUAGES = frozenset(
+    "AR BG BN CA CS DA DE EL EN EN-GB ES ET EU FI FR GL GU HE HI HR HU IS IT JA KN "
+    "KO LT LV ML MR MS NB NL PA PL PT-BR PT-PT RO RU SK SL SR SV TA TE TH TR UK VI "
+    "ZH-HANS ZH-HANT".split()
+)
+_YOUCOM_SAFESEARCH = {0: "off", 1: "moderate", 2: "strict"}
 
 
 class SearchProviderError(RuntimeError):
@@ -150,28 +160,64 @@ def _select_providers(
     return selected
 
 
-async def _get_json(
+def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
+    """Parse Retry-After (delta-seconds or HTTP-date); None if missing or invalid."""
+    value = (value or "").strip()
+    try:
+        if value.isdigit():
+            return float(int(value))
+        when = parsedate_to_datetime(value)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+async def _request_json(
+    method: str,
     url: str,
     *,
-    params: dict[str, Any],
+    params: Optional[dict[str, Any]] = None,
+    json: Optional[dict[str, Any]] = None,
     headers: dict[str, str],
     auth: Optional[httpx.Auth],
     max_retries: int,
     status_reason: Callable[[int], str],
 ) -> object:
-    """GET JSON with per-attempt timeout; retry request errors, not status errors."""
+    """Request JSON with per-attempt timeout.
+
+    Retries request errors with backoff and one 429 whose Retry-After is short;
+    other status errors are not retried.
+    """
     attempts = max(1, max_retries)
+    rate_limit_retried = False
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
         for attempt in range(attempts):
             try:
-                response = await client.get(
-                    url, params=params, headers=headers, auth=auth
+                response = await client.request(
+                    method, url, params=params, json=json, headers=headers, auth=auth
                 )
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
-                raise SearchProviderError(
-                    status_reason(exc.response.status_code)
-                ) from None
+                status = exc.response.status_code
+                reason = status_reason(status)
+                if status != 429:
+                    raise SearchProviderError(reason) from None
+                delay = _retry_after_seconds(exc.response.headers.get("Retry-After"))
+                if (
+                    delay is not None
+                    and delay <= _MAX_RETRY_AFTER_SECONDS
+                    and attempt + 1 < attempts
+                    and not rate_limit_retried
+                ):
+                    rate_limit_retried = True
+                    await asyncio.sleep(delay)
+                    continue
+                hint = (
+                    f"retry after {math.ceil(delay)}s"
+                    if delay is not None
+                    else "try again later"
+                )
+                raise SearchProviderError(f"{reason}, {hint}") from None
             except httpx.RequestError:
                 if attempt + 1 >= attempts:
                     raise SearchProviderError("request failed") from None
@@ -242,7 +288,8 @@ async def _search_searxng(
         if config.username and config.password
         else None
     )
-    payload = await _get_json(
+    payload = await _request_json(
+        "GET",
         f"{config.base_url}/search",
         params=params,
         headers={"Accept": "application/json", "Content-Type": "application/json"},
@@ -254,12 +301,14 @@ async def _search_searxng(
 
 
 def _youcom_status_reason(status: int) -> str:
-    if status in (401, 403):
+    if status == 401:
         return "API key rejected, check YDC_API_KEY"
+    if status == 403:
+        return "API key lacks the required scope for this endpoint, check YDC_API_KEY"
     if status == 402:
         return "API credits exhausted"
     if status == 429:
-        return "rate limit exceeded, try again later"
+        return "rate limit exceeded"
     return f"HTTP {status}"
 
 
@@ -269,21 +318,32 @@ async def _search_youcom(
     config: ProviderConfig,
     language: Optional[str],
     time_range: Optional[str],
+    safesearch: int,
     pageno: int,
     max_results: int,
     max_retries: int,
 ) -> list[SearchResult]:
-    params: dict[str, Any] = {"query": query, "count": max_results}
-    # SearXNG's "all"/"auto" mean no language filter; You.com applies language strictly.
-    if language and language.lower() not in ("all", "auto"):
-        params["language"] = language.upper()
+    # You.com serves at most 10 pages (offset 0..9).
+    if pageno > 10:
+        return []
+    body: dict[str, Any] = {"query": query, "count": max_results}
+    # Codes outside You.com's enum get HTTP 422: fall back to the primary subtag,
+    # else send no language filter (e.g. SearXNG's "all").
+    code = (language or "").strip().upper().replace("_", "-")
+    if code not in _YOUCOM_LANGUAGES:
+        code = code.split("-")[0]
+    if code in _YOUCOM_LANGUAGES:
+        body["language"] = code
     if time_range and time_range.lower() in _VALID_TIME_RANGES:
-        params["freshness"] = time_range.lower()
+        body["freshness"] = time_range.lower()
+    if safesearch in _YOUCOM_SAFESEARCH:
+        body["safesearch"] = _YOUCOM_SAFESEARCH[safesearch]
     if pageno > 1:
-        params["offset"] = pageno - 1
-    payload = await _get_json(
+        body["offset"] = pageno - 1
+    payload = await _request_json(
+        "POST",
         config.base_url,
-        params=params,
+        json=body,
         headers={
             "User-Agent": YOUCOM_USER_AGENT,
             "Accept": "application/json",
@@ -302,11 +362,14 @@ async def _search_youcom(
         if not isinstance(item, dict):
             continue
         page_age = item.get("page_age")
+        content = item.get("description")
+        if not content and isinstance(item.get("snippets"), list):
+            content = next((snippet for snippet in item["snippets"] if snippet), "")
         results.append(
             SearchResult(
                 title=str(item.get("title", "")),
                 url=str(item.get("url", "")),
-                content=str(item.get("description", "")),
+                content=str(content or ""),
                 publishedDate=str(page_age) if page_age is not None else "",
                 providers=[YOUCOM],
             )
@@ -415,6 +478,7 @@ async def search(
                     config=configured[provider],
                     language=language,
                     time_range=time_range,
+                    safesearch=safesearch,
                     pageno=pageno,
                     max_results=max_results,
                     max_retries=max_retries,

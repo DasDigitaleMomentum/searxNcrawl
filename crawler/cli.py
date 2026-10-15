@@ -793,7 +793,7 @@ Examples:
         type=int,
         choices=[0, 1, 2],
         default=1,
-        help="Safe search level: 0 (off), 1 (moderate), 2 (strict) (SearXNG only)",
+        help="Safe search level: 0 (off), 1 (moderate), 2 (strict)",
     )
     parser.add_argument(
         "--max-results",

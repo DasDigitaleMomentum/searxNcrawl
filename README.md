@@ -142,14 +142,14 @@ uv run playwright install chromium
 
 - `providers` (MCP, e.g. `["searxng"]`) or `--providers searxng,youcom` (CLI) narrows a call to a subset of the configured providers; unknown or unconfigured names return an error. Default: all configured providers.
 - Results are merged round-robin with conservative URL dedup. Results returned by several providers come first, and every result lists its sources in `providers`. The list is capped at `max_results` (1–50).
-- `language`, `time_range` and `pageno` apply to both providers; `categories`, `engines` and `safesearch` are SearXNG only.
+- `language`, `time_range`, `safesearch` and `pageno` apply to both providers; `categories` and `engines` are SearXNG only. For You.com, `language` is mapped to its supported codes (e.g. `en-us` → `EN`; unsupported codes such as `zh` search without a language filter), and pages beyond 10 return no You.com results.
 - If some providers fail, the results of the others are returned (the failure is logged as a warning). If all selected providers fail, search returns an error with a short reason per provider (no secrets, URLs or response bodies), e.g. `youcom: API key rejected, check YDC_API_KEY`.
 
 **Environment variables:**
 
 | Variable               | Example / Recommended                          | Description                                                                                                  |
 | ---------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `SEARXNG_URL`          | `http://localhost:8888` (no default)           | SearXNG instance URL; enables SearXNG                                                                        |
+| `SEARXNG_URL`          | (none)                                         | SearXNG instance URL, e.g. `http://localhost:8888`; enables SearXNG                                          |
 | `SEARXNG_USERNAME`     | (none)                                         | Optional basic auth user (set both or neither)                                                               |
 | `SEARXNG_PASSWORD`     | (none)                                         | Optional basic auth pass (set both or neither)                                                               |
 | `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |

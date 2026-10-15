@@ -88,12 +88,12 @@ Search the web via the configured providers (SearXNG and/or You.com). All config
 | Parameter    | Type       | Default | Description                                           |
 | ------------ | ---------- | ------- | ----------------------------------------------------- |
 | `query`      | `str`       | required | Search query string                                   |
-| `language`   | `str`       | `"en"`    | Language code (e.g. `"en"`, `"de"`, `"fr"`)                 |
+| `language`   | `str`       | `"en"`    | Language code (e.g. `"en"`, `"de"`, `"fr"`). You.com: codes it does not support search without a language filter |
 | `time_range` | `str`       | `null`   | `"day"`, `"week"`, `"month"`, `"year"`                       |
 | `categories` | `List[str]` | `null`   | SearXNG only. `"general"`, `"images"`, `"news"`, etc.          |
 | `engines`    | `List[str]` | `null`   | SearXNG only. Specific engines to use                 |
-| `safesearch` | `int`       | `1`      | SearXNG only. `0` (off), `1` (moderate), `2` (strict)    |
-| `pageno`     | `int`       | `1`      | Page number (≥ 1)                                    |
+| `safesearch` | `int`       | `1`      | `0` (off), `1` (moderate), `2` (strict)                  |
+| `pageno`     | `int`       | `1`      | Page number (≥ 1). You.com returns no results beyond page 10 |
 | `max_results` | `int`      | `10`     | Max results (1–50)                                    |
 | `max_retries` | `int`      | `3`      | Max attempts per provider for transient request errors (timeouts included) |
 | `providers`  | `List[str]` | `null`   | Subset of configured providers: `"searxng"`, `"youcom"` (default: all configured) |

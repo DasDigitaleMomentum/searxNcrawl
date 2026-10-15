@@ -161,7 +161,7 @@ async def test_search_retries_on_request_error_with_exponential_backoff(
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, url, *, params=None, headers=None, auth=None):
+        async def request(self, method, url, **kwargs):
             state["calls"] += 1
             if state["calls"] == 1:
                 req = httpx.Request("GET", "https://searx.test/search")
@@ -208,7 +208,7 @@ async def test_search_does_not_retry_on_http_status_error(
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, url, *, params=None, headers=None, auth=None):
+        async def request(self, method, url, **kwargs):
             state["calls"] += 1
             return DummyResponse()
 

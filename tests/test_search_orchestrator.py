@@ -50,11 +50,13 @@ def _web(count: int) -> list[dict]:
     ]
 
 
-def _response(status: int = 200, *, json=None, text: str = "") -> httpx.Response:
+def _response(
+    status: int = 200, *, json=None, text: str = "", headers=None
+) -> httpx.Response:
     request = httpx.Request("GET", "https://provider.invalid")
     if json is not None:
-        return httpx.Response(status, request=request, json=json)
-    return httpx.Response(status, request=request, text=text)
+        return httpx.Response(status, request=request, json=json, headers=headers)
+    return httpx.Response(status, request=request, text=text, headers=headers)
 
 
 def _request_error(message: str = "temporary network issue") -> httpx.RequestError:
@@ -75,7 +77,7 @@ class _Recorder:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, *items, route=None) -> _Recorder:
-    """Replace httpx.AsyncClient: record each GET, return or raise scripted items.
+    """Replace httpx.AsyncClient: record each request, return or raise scripted items.
 
     Items are consumed in order and the last one repeats; ``route(url)`` picks
     the item per request instead.
@@ -92,9 +94,18 @@ def _install(monkeypatch: pytest.MonkeyPatch, *items, route=None) -> _Recorder:
         async def __aexit__(self, *args):
             return False
 
-        async def get(self, url, *, params=None, headers=None, auth=None):
+        async def request(
+            self, method, url, *, params=None, json=None, headers=None, auth=None
+        ):
             recorder.calls.append(
-                {"url": url, "params": params, "headers": headers, "auth": auth}
+                {
+                    "method": method,
+                    "url": url,
+                    "params": params,
+                    "json": json,
+                    "headers": headers,
+                    "auth": auth,
+                }
             )
             if recorder.route is not None:
                 item = recorder.route(url)
@@ -257,6 +268,8 @@ async def test_searxng_request_mapping_auth_retry_and_page_clamp(
     assert recorder.sleeps == [0.5]
     assert recorder.timeouts == [30.0]
     call = recorder.calls[-1]
+    assert call["method"] == "GET"
+    assert call["json"] is None
     assert call["url"] == "https://secret.invalid/search"
     assert call["params"] == {
         "q": "private-query",
@@ -389,6 +402,7 @@ async def _youcom(**overrides) -> list[SearchResult]:
         config=YOUCOM_CONFIG,
         language="en",
         time_range=None,
+        safesearch=1,
         pageno=1,
         max_results=10,
         max_retries=1,
@@ -402,9 +416,12 @@ async def test_youcom_request_and_mapping(monkeypatch: pytest.MonkeyPatch) -> No
     del web[1]["page_age"]
     recorder = _install(monkeypatch, _response(json={"results": {"web": web}}))
 
-    results = await _youcom(language="de", time_range="week", pageno=3, max_results=7)
+    results = await _youcom(
+        language="de", time_range="week", safesearch=2, pageno=3, max_results=7
+    )
 
     call = recorder.calls[0]
+    assert call["method"] == "POST"
     assert call["url"] == orchestrator.YOUCOM_URL
     assert call["headers"] == {
         "User-Agent": orchestrator.YOUCOM_USER_AGENT,
@@ -412,11 +429,13 @@ async def test_youcom_request_and_mapping(monkeypatch: pytest.MonkeyPatch) -> No
         "X-API-Key": "sk-test",
     }
     assert call["auth"] is None
-    assert call["params"] == {
+    assert call["params"] is None
+    assert call["json"] == {
         "query": "q",
         "count": 7,
         "language": "DE",
         "freshness": "week",
+        "safesearch": "strict",
         "offset": 2,
     }
     assert results == [
@@ -431,13 +450,81 @@ async def test_youcom_request_and_mapping(monkeypatch: pytest.MonkeyPatch) -> No
     ]
 
 
-@pytest.mark.parametrize("language", ["all", "auto", ""])
-async def test_youcom_omits_no_filter_language(
-    monkeypatch: pytest.MonkeyPatch, language: str
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("de", "DE"),
+        ("en-us", "EN"),
+        ("en-GB", "EN-GB"),
+        ("en_gb", "EN-GB"),
+        ("pt-br", "PT-BR"),
+        (" zh-hant ", "ZH-HANT"),
+        ("zh", None),
+        ("all", None),
+        ("auto", None),
+        ("", None),
+    ],
+)
+async def test_youcom_language_maps_to_enum_or_is_omitted(
+    monkeypatch: pytest.MonkeyPatch, language: str, expected: str | None
 ) -> None:
     recorder = _install(monkeypatch, _response(json={"results": {"web": []}}))
     await _youcom(language=language)
-    assert recorder.calls[0]["params"] == {"query": "q", "count": 10}
+    assert recorder.calls[0]["json"].get("language") == expected
+
+
+@pytest.mark.parametrize(
+    ("safesearch", "expected"), [(0, "off"), (1, "moderate"), (2, "strict")]
+)
+async def test_youcom_safesearch_maps_to_named_level(
+    monkeypatch: pytest.MonkeyPatch, safesearch: int, expected: str
+) -> None:
+    recorder = _install(monkeypatch, _response(json={"results": {"web": []}}))
+    await _youcom(safesearch=safesearch)
+    assert recorder.calls[0]["json"]["safesearch"] == expected
+
+
+async def test_youcom_page_beyond_ten_sends_no_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _install(monkeypatch, _response(json={"results": {"web": _web(1)}}))
+    assert await _youcom(pageno=11) == []
+    assert recorder.calls == []
+
+    await _youcom(pageno=10)
+    assert recorder.calls[0]["json"]["offset"] == 9
+
+
+async def test_youcom_page_beyond_ten_leaves_searxng_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orchestrator, "_resolve_provider_config", _configs)
+    recorder = _install(
+        monkeypatch,
+        route=lambda url: _response(
+            json={"results": [{"title": "S", "url": "https://s.example/11"}]}
+        ),
+    )
+    results = await orchestrator.search("q", pageno=11)
+    assert [call["url"] for call in recorder.calls] == ["https://searx.invalid/search"]
+    assert recorder.calls[0]["params"]["pageno"] == 11
+    assert [(item.title, item.providers) for item in results] == [("S", ["searxng"])]
+
+
+async def test_youcom_content_falls_back_to_first_snippet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    web = _web(4)
+    web[0]["description"] = ""
+    web[0]["snippets"] = ["", "first non-empty", "second"]
+    del web[1]["description"]
+    web[2]["description"] = None
+    web[2]["snippets"] = []
+    web[3]["description"] = ""
+    del web[3]["snippets"]
+    _install(monkeypatch, _response(json={"results": {"web": web}}))
+    results = await _youcom()
+    assert [result.content for result in results] == ["first non-empty", "snippet", "", ""]
 
 
 async def test_youcom_without_hits_returns_empty_list(
@@ -451,7 +538,10 @@ async def test_youcom_without_hits_returns_empty_list(
     ("status", "reason"),
     [
         (401, "API key rejected, check YDC_API_KEY"),
-        (403, "API key rejected, check YDC_API_KEY"),
+        (
+            403,
+            "API key lacks the required scope for this endpoint, check YDC_API_KEY",
+        ),
         (402, "API credits exhausted"),
         (429, "rate limit exceeded, try again later"),
         (500, "HTTP 500"),
@@ -465,6 +555,81 @@ async def test_youcom_status_reason_without_body(
         await _youcom(max_retries=3)
     assert str(raised.value) == reason
     assert len(recorder.calls) == 1
+
+
+def _rate_limited(retry_after: str | None = None) -> httpx.Response:
+    headers = {"Retry-After": retry_after} if retry_after is not None else None
+    return _response(429, text="body", headers=headers)
+
+
+async def test_youcom_429_with_short_retry_after_sleeps_once_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _install(
+        monkeypatch, _rate_limited("2"), _response(json={"results": {"web": _web(1)}})
+    )
+    results = await _youcom(max_retries=3)
+    assert len(recorder.calls) == 2
+    assert recorder.sleeps == [2.0]
+    assert [result.title for result in results] == ["T1"]
+
+
+async def test_429_is_retried_at_most_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _install(monkeypatch, _rate_limited("1"))
+    with pytest.raises(SearchProviderError) as raised:
+        await _youcom(max_retries=3)
+    assert str(raised.value) == "rate limit exceeded, retry after 1s"
+    assert len(recorder.calls) == 2
+    assert recorder.sleeps == [1.0]
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "max_retries", "reason"),
+    [
+        ("30", 3, "rate limit exceeded, retry after 30s"),
+        (None, 3, "rate limit exceeded, try again later"),
+        ("soon", 3, "rate limit exceeded, try again later"),
+        ("2", 1, "rate limit exceeded, retry after 2s"),
+    ],
+)
+async def test_youcom_429_without_retry_reports_hint(
+    monkeypatch: pytest.MonkeyPatch,
+    retry_after: str | None,
+    max_retries: int,
+    reason: str,
+) -> None:
+    recorder = _install(monkeypatch, _rate_limited(retry_after))
+    with pytest.raises(SearchProviderError) as raised:
+        await _youcom(max_retries=max_retries)
+    assert str(raised.value) == reason
+    assert len(recorder.calls) == 1
+    assert recorder.sleeps == []
+
+
+def test_retry_after_parses_seconds_and_http_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FixedDatetime(orchestrator.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return orchestrator.datetime(2026, 10, 15, 12, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(orchestrator, "datetime", FixedDatetime)
+    parse = orchestrator._retry_after_seconds
+    assert parse(" 3 ") == 3.0
+    assert parse("Thu, 15 Oct 2026 12:00:04 GMT") == 4.0
+    assert parse("Thu, 15 Oct 2026 11:59:00 GMT") == 0.0
+    for invalid in (None, "", "-1", "1.5", "soon"):
+        assert parse(invalid) is None
+
+
+async def test_searxng_429_uses_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _install(
+        monkeypatch, _rate_limited("1"), _response(json={"results": []})
+    )
+    assert await _searxng(max_retries=2) == []
+    assert recorder.sleeps == [1.0]
+    assert [call["method"] for call in recorder.calls] == ["GET", "GET"]
 
 
 async def test_youcom_retries_on_request_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -826,7 +991,8 @@ async def test_mcp_providers_param_selects_youcom_only(
 
     assert calls[SEARXNG] == []
     assert len(calls[YOUCOM]) == 1
-    assert not {"engines", "categories", "safesearch"} & set(calls[YOUCOM][0])
+    assert not {"engines", "categories"} & set(calls[YOUCOM][0])
+    assert calls[YOUCOM][0]["safesearch"] == 2
     assert calls[YOUCOM][0]["max_retries"] == 2
     assert [item["providers"] for item in payload["results"]] == [["youcom"], ["youcom"]]
 
@@ -900,6 +1066,18 @@ async def test_cli_single_attempt_on_read_timeout(
     assert [item["title"] for item in payload["results"]] == ["T1", "T2"]
     assert len(recorder.calls) == 2
     assert recorder.sleeps == []
+
+
+async def test_cli_never_sleeps_on_429(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("YDC_API_KEY", "sk-test")
+    recorder = _install(monkeypatch, _rate_limited("1"))
+
+    assert await cli._run_search_async(cli._parse_search_args(["q"])) == 1
+    assert len(recorder.calls) == 1
+    assert recorder.sleeps == []
+    assert "youcom: rate limit exceeded, retry after 1s" in caplog.text
 
 
 @pytest.mark.parametrize(

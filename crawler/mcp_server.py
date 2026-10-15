@@ -452,7 +452,7 @@ async def search(
         time_range: Time range filter - 'day', 'week', 'month', or 'year'. Default: None (no filter)
         categories: SearXNG only. Categories to search (e.g., ['general', 'images', 'news']). Default: None (all)
         engines: SearXNG only. Specific search engines to use. Default: None (all available)
-        safesearch: SearXNG only. Safe search level - 0 (off), 1 (moderate), 2 (strict). Default: 1
+        safesearch: Safe search level - 0 (off), 1 (moderate), 2 (strict). Default: 1
         pageno: Page number for results (minimum 1). Default: 1
         max_results: Maximum results to return (1-50). Default: 10
         max_retries: Maximum attempts per provider for transient request errors (default: 3)

@@ -1,8 +1,47 @@
-# searxNcrawl
+<p align="center">
+  <a href="https://www.searxncrawl.io/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+      <img src="docs/assets/banner-light.png" alt="searxNcrawl: search and crawl the web for your AI agents. Open-source MCP server for web search and clean Markdown crawling." width="100%">
+    </picture>
+  </a>
+</p>
 
-MCP server and CLI toolkit for web search and crawling, built on [Crawl4AI](https://github.com/unclecode/crawl4ai). Search queries the configured providers — [SearXNG](https://github.com/searxng/searxng) and/or [You.com](https://you.com) — in parallel and merges the results.
+<p align="center">
+  <a href="https://pypi.org/project/searxncrawl/"><img alt="PyPI" src="https://img.shields.io/pypi/v/searxncrawl?style=flat-square&label=PyPI&labelColor=16161a&color=3046ff"></a>
+  <a href="https://pypi.org/project/searxncrawl/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3046ff?style=flat-square&labelColor=16161a"></a>
+  <a href="https://github.com/DasDigitaleMomentum/searxNcrawl/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/DasDigitaleMomentum/searxNcrawl/ci.yml?branch=main&style=flat-square&label=CI&labelColor=16161a"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-3046ff?style=flat-square&labelColor=16161a"></a>
+  <a href="https://modelcontextprotocol.io/"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-3046ff?style=flat-square&labelColor=16161a"></a>
+</p>
 
-Published at [github.com/DasDigitaleMomentum/searxNcrawl](https://github.com/DasDigitaleMomentum/searxNcrawl) — maintained by **DDM – Das Digitale Momentum GmbH & Co KG**. Successor to `searxng-mcp`.
+<p align="center">
+  <a href="https://www.searxncrawl.io/"><b>Website</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/overview.md">Docs</a> ·
+  <a href="https://www.searxncrawl.io/developers/">Developers</a> ·
+  <a href="https://www.searxncrawl.io/#cloud">Cloud (planned)</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+**searxNcrawl** is an open-source MCP server and CLI toolkit that gives AI agents web search and clean Markdown crawling, built on [Crawl4AI](https://github.com/unclecode/crawl4ai). Search queries the configured providers, [SearXNG](https://github.com/searxng/searxng) and/or [You.com](https://you.com), in parallel and merges the results. It runs on your own hardware, needs no API key with SearXNG and succeeds `searxng-mcp`.
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>Web search</b><br>Your own SearXNG instance and/or the You.com API, queried in parallel; results are merged and attributed to their providers, filtered by language and time range.</td>
+    <td width="33%" valign="top"><b>Page crawl</b><br>One or many URLs to Markdown or JSON, with repeated blocks removed and links optionally stripped.</td>
+    <td width="33%" valign="top"><b>Site crawl</b><br>Whole sites with depth and page limits, tuned for documentation.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Authenticated crawls</b><br>Capture a login session once with <code>crawl-capture</code>, then crawl behind the login.</td>
+    <td valign="top"><b>STDIO and HTTP</b><br>Plug into local MCP clients, or expose an HTTP endpoint with host and CORS guards.</td>
+    <td valign="top"><b>CLI and Python API</b><br><code>crawl</code>, <code>search</code> and <code>crawl-capture</code> on the command line, or import it in Python.</td>
+  </tr>
+</table>
+
+```bash
+SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
+```
 
 <!-- mcp-name: io.github.DasDigitaleMomentum/searxncrawl -->
 
@@ -367,4 +406,6 @@ MIT — © 2026 DDM – Das Digitale Momentum GmbH & Co KG
 
 ---
 
-Maintained by [Das Digitale Momentum](https://www.das-digitale-momentum.de/en/open-source/#searxncrawl) · Much, Germany · [All our open source projects](https://github.com/DasDigitaleMomentum)
+<p align="center">
+  <sub>Maintained by <a href="https://www.das-digitale-momentum.de/en/open-source/#searxncrawl"><b>DDM – Das Digitale Momentum GmbH &amp; Co. KG</b></a>, Much, Germany · <a href="https://www.searxncrawl.io/">www.searxncrawl.io</a> · <a href="https://github.com/DasDigitaleMomentum">All our open-source projects</a></sub>
+</p>

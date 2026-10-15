@@ -192,6 +192,10 @@ def build_markdown_generator() -> DefaultMarkdownGenerator:
         threshold=0.45,
         threshold_type="dynamic",
         min_word_threshold=1,
+        # Keep code blocks whole: Prism/highlight.js/CodeMirror wrap punctuation
+        # like "<" in tiny <span>s that pruning would otherwise drop one by one.
+        preserve_tags=["pre", "code"],
+        preserve_classes=["cm-content"],
     )
     return DefaultMarkdownGenerator(
         content_filter=prune_filter,

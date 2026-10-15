@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import weakref
 from dataclasses import dataclass, field
+from importlib.metadata import version
 from typing import List, Optional
 
 from crawl4ai import CrawlerRunConfig
@@ -201,6 +203,22 @@ def build_markdown_generator() -> DefaultMarkdownGenerator:
     )
 
 
+def _shadow_dom_kwargs() -> dict:
+    """Read content that sites render into shadow roots (e.g. MDN code examples).
+
+    crawl4ai < 0.8.5 has no ``flatten_shadow_dom`` and rejects it with a
+    TypeError, which failed every crawl on stale installs; skip it there.
+    """
+    if "flatten_shadow_dom" in inspect.signature(CrawlerRunConfig).parameters:
+        return {"flatten_shadow_dom": True}
+    LOGGER.warning(
+        "crawl4ai %s lacks flatten_shadow_dom; shadow DOM content is skipped. "
+        "Upgrade to crawl4ai>=0.8.5.",
+        version("crawl4ai"),
+    )
+    return {}
+
+
 def build_markdown_run_config(
     overrides: Optional[RunConfigOverrides] = None,
 ) -> CrawlerRunConfig:
@@ -222,10 +240,8 @@ def build_markdown_run_config(
         # The page reload that used to live here runs as a Playwright hook now
         # (crawler.page_hooks), so it completes before wait_for and capture.
         js_code="window.scrollTo(0, document.body.scrollHeight);",
-        # Read content that sites render into shadow roots (e.g. MDN code
-        # examples); without it those blocks are missing from the markdown.
-        flatten_shadow_dom=True,
         wait_for=build_content_wait_condition(),
+        **_shadow_dom_kwargs(),
     )
     if overrides:
         _apply_overrides(config, overrides)

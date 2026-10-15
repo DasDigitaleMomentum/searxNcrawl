@@ -188,3 +188,22 @@ async def test_reload_hook_reloads_once_in_chromium() -> None:
             assert await page.inner_text("main") == "load 2"
         finally:
             await browser.close()
+
+
+def test_config_skips_flatten_shadow_dom_on_old_crawl4ai(monkeypatch) -> None:
+    """crawl4ai < 0.8.5 rejects flatten_shadow_dom; building the config must not crash."""
+
+    class LegacyRunConfig:
+        def __init__(self, **kwargs) -> None:
+            if "flatten_shadow_dom" in kwargs:
+                raise TypeError(
+                    "__init__() got an unexpected keyword argument 'flatten_shadow_dom'"
+                )
+            self.__dict__.update(kwargs)
+
+    monkeypatch.setattr("crawler.config.CrawlerRunConfig", LegacyRunConfig)
+
+    config = build_markdown_run_config()
+
+    assert isinstance(config, LegacyRunConfig)
+    assert not hasattr(config, "flatten_shadow_dom")

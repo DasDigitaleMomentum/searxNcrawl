@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a new capability or a change to existing behaviour
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Planned work is listed in the [roadmap](https://github.com/DasDigitaleMomentum/searxNcrawl#roadmap). For open-ended ideas, [Discussions](https://github.com/DasDigitaleMomentum/searxNcrawl/discussions) may be a better place.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you or your agent trying to do, and what stops you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work from a user's point of view? For MCP tools, sketch the call and the expected output.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - search
+        - crawl / crawl_site
+        - authenticated crawling
+        - MCP server / transport
+        - CLI
+        - Python API
+        - Documentation
+        - Other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other tools you have looked at.
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you like to implement this?
+      options:
+        - "Yes"
+        - "Maybe, with guidance"
+        - "No"

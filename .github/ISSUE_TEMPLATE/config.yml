@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/DasDigitaleMomentum/searxNcrawl/discussions
+    about: Ask how to set something up or share an idea before it becomes a feature request.
+  - name: Report a security vulnerability
+    url: https://github.com/DasDigitaleMomentum/searxNcrawl/security/advisories/new
+    about: Please report vulnerabilities privately, never in a public issue.
+  - name: Commercial support and consulting
+    url: https://www.das-digitale-momentum.de/en/
+    about: For paid support, consulting or custom development.

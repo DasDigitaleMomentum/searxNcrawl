@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Search errors are short per-provider reasons without secrets, URLs or response bodies (a SearXNG non-401 status no longer includes the response body).
 - HTTP 429 from a search provider is retried once when `Retry-After` is at most 5 s and attempts remain (MCP `max_retries`; the CLI makes a single attempt and never retries). Otherwise the reason ends with `retry after Ns` or `try again later`.
 
+### Fixed
+- Every crawl failed with `CrawlerRunConfig.__init__() got an unexpected keyword argument 'flatten_shadow_dom'` when the code ran against Crawl4AI < 0.8.5 (e.g. a stale virtualenv). `flatten_shadow_dom` is now passed only if the installed Crawl4AI supports it; otherwise a warning is logged and shadow DOM content is skipped.
+- Shadow DOM flattening corrupted pages whose text contains `<`, `>` or `&`: Crawl4AI's `flatten_shadow_dom.js` writes text nodes back unescaped, so text such as `<details>` was re-parsed as markup. Closing tags vanished from HTML code samples, and the broken tree defeated `target_elements`, pulling site navigation into the markdown (MDN: 38 kB with nav instead of 22 kB of article). The script is now patched at import to escape text nodes.
+
 ## [0.31.0] - 2026-10-09
 
 ### Added

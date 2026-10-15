@@ -101,6 +101,7 @@ Check it with `curl "http://localhost:8888/search?q=test&format=json"`. Which en
 | `SEARXNG_URL`          | (none)                                         | SearXNG instance URL, e.g. `http://localhost:8888`; enables SearXNG                                          |
 | `SEARXNG_USERNAME`     | (none)                                         | Optional basic auth user (set both or neither)                                                               |
 | `SEARXNG_PASSWORD`     | (none)                                         | Optional basic auth pass (set both or neither)                                                               |
+| `SEARXNG_EXTRA_HEADERS`| Cloudflare Access Example: `{"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "CF-Access-Client-Id": "@/some/file/path/cloudflare_id", "CF-Access-Client-Secret": "@/some/file/path/cloudflare_secret"}`                               | Extra SearXNG HTTP request headers as a JSON object, header values of the form `@/path` are loaded from a file. |
 | `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |
 | `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate,providers`    | Comma-separated result fields. Unset = all fields. Available: title, url, content, publishedDate, providers  |
 

@@ -20,6 +20,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from .env import searxng_extra_headers
+
 LOGGER = logging.getLogger(__name__)
 
 SEARXNG = "searxng"
@@ -288,11 +290,13 @@ async def _search_searxng(
         if config.username and config.password
         else None
     )
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    headers.update(searxng_extra_headers())
     payload = await _request_json(
         "GET",
         f"{config.base_url}/search",
         params=params,
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        headers=headers,
         auth=auth,
         max_retries=max_retries,
         status_reason=_searxng_status_reason,

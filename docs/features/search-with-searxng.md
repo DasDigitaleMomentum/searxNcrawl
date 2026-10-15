@@ -11,45 +11,54 @@ version: 1.0
 
 ## Summary
 
-This feature provides configurable metasearch via SearXNG, available through both CLI and MCP, with support for language/time/category/engine filters and result limiting.
+This feature provides web search over a fixed set of providers, SearXNG and You.com, available through both CLI and MCP. Every configured provider is queried in parallel; the results are merged into one list in which each result names the providers that returned it. (The file name is kept for link stability.)
 
 ## How It Works
 
 ### User Flow
 
-1. User provides a query and optional filters.
-2. User invokes `search` CLI command or MCP `search` tool.
-3. System sends request to configured SearXNG `/search` endpoint with JSON format.
-4. Results are truncated to max result limit and returned as markdown (CLI default) or JSON.
+1. The operator configures at least one provider: `SEARXNG_URL` (optional basic auth) and/or `YDC_API_KEY`.
+2. User invokes the `search` CLI command or MCP `search` tool with a query, optional filters and an optional provider subset (`--providers` / `providers`).
+3. All selected providers are queried in parallel.
+4. Results are merged, bounded to `max_results` and returned as markdown (CLI default, with a `**Sources:**` line per result) or JSON.
 
 ### Technical Flow
 
-1. Interface resolves SearXNG settings from environment variables.
-2. Request params are assembled (`q`, `language`, `safesearch`, optional filters).
-3. `httpx.AsyncClient` performs GET `/search`.
-4. Response JSON is parsed, results are bounded to 1..50.
-5. Output is rendered/returned; HTTP/auth/request errors are converted to friendly failures.
+1. `search_orchestrator.search()` resolves provider configuration from the environment at call time (`_resolve_provider_config`) and applies the optional subset (`_select_providers`).
+2. One call per selected provider runs under `asyncio.gather`:
+   - `_search_searxng`: GET `<SEARXNG_URL>/search` with `q`, `format=json`, `language`, `safesearch`, `pageno`, optional `time_range`, `categories`, `engines`; basic auth only when both credentials are set.
+   - `_search_youcom`: GET `https://ydc-index.io/v1/search` with `X-API-Key`, the You.com User-Agent, `query`, `count`, optional `language` (upper-cased; `all`/`auto` omitted), `freshness`, `offset`.
+   - Both use `_get_json`: fixed 30 s timeout per attempt, retry with backoff on request errors (timeouts included), no retry on HTTP status errors.
+3. `_merge_results` merges round-robin in the fixed order `searxng`, `youcom`, with conservative URL dedup; results from several providers come first.
+4. `serialize_search_results` builds `{query, number_of_results, results}` and applies `SEARCH_RESULT_FIELDS`.
+5. A failed provider is logged as a warning; if every selected provider fails, `SearchProviderError` lists one sanitized reason per provider.
 
 ## Implementation
 
 | Module | Symbols | Role |
 |--------|---------|------|
-| [crawler-cli](../modules/crawler-cli.md) | `_run_search_async`, `_parse_search_args`, `_format_search_markdown`, `search_main` | CLI search UX and output formatting. |
-| [crawler-mcp-server](../modules/crawler-mcp-server.md) | `search`, `_get_searxng_client` | MCP search tool and configured client creation. |
+| `crawler/search_orchestrator.py` | `search`, `SearchResult`, `SearchProviderError`, `ProviderConfig`, `configured_providers`, `_resolve_provider_config`, `_select_providers`, `_get_json`, `_search_searxng`, `_search_youcom`, `_merge_results`, `serialize_search_results`, `_parse_search_result_fields` | Provider configuration and selection, provider calls, merge, shared serializer. |
+| [crawler-cli](../modules/crawler-cli.md) | `_run_search_async`, `_parse_search_args`, `_format_search_markdown`, `search_main` | CLI search UX (single attempt per provider) and output formatting. |
+| [crawler-mcp-server](../modules/crawler-mcp-server.md) | `search` | MCP search tool (`max_retries` per provider); returns the envelope or `{"error", "query"}` JSON. |
 
 ## Configuration
 
-- Environment variables:
-  - `SEARXNG_URL` (`crawler/cli.py:494`, `crawler/mcp_server.py:54`)
-  - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/cli.py:495`-`crawler/cli.py:496`, `crawler/mcp_server.py:55`-`crawler/mcp_server.py:56`)
-- CLI filters: `--language`, `--time-range`, `--categories`, `--engines`, `--safesearch`, `--max-results` (`crawler/cli.py:430`, `crawler/cli.py:436`, `crawler/cli.py:443`, `crawler/cli.py:450`, `crawler/cli.py:457`, `crawler/cli.py:464`).
-- MCP search parameters parallel these options (`crawler/mcp_server.py:351`-`crawler/mcp_server.py:358`).
+- Environment variables (read at call time):
+  - `SEARXNG_URL` — enables SearXNG; must be an http(s) URL without embedded credentials; no default.
+  - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` — optional basic auth, both or neither.
+  - `YDC_API_KEY` — enables You.com (stripped; whitespace-only counts as unset). You.com queries go to You.com in the US.
+  - `SEARCH_RESULT_FIELDS` — comma-separated subset of `title,url,content,publishedDate,providers`; unset/empty returns all of them.
+- CLI options: `--language`, `--time-range`, `--categories`, `--engines`, `--safesearch` (the last three SearXNG only), `--max-results`, `--providers`.
+- MCP parameters: `language`, `time_range`, `categories`, `engines`, `safesearch` (the last three SearXNG only), `pageno`, `max_results`, `max_retries`, `providers`.
 
 ## Edge Cases & Limitations
 
-- Missing/unreachable SearXNG returns request errors; no local search fallback exists.
-- Authentication failures are explicitly mapped for 401 responses (`crawler/cli.py:561`, `crawler/mcp_server.py:432`).
-- Result counts are constrained to `[1, 50]` regardless of requested value (`crawler/cli.py:537`, `crawler/mcp_server.py:422`).
+- No provider configured, an unknown provider name or an unconfigured provider in the subset returns an error (MCP `error` JSON, CLI exit code 1).
+- A set-but-invalid `SEARXNG_URL` or a single SearXNG credential disables SearXNG with a warning that names the variable, never its value.
+- Partial failure returns the remaining providers' results; total failure reports e.g. `searxng: request failed; youcom: API key rejected, check YDC_API_KEY`. Reasons never contain secrets, URLs or response bodies.
+- SearXNG 401 maps to a hint to check `SEARXNG_USERNAME/SEARXNG_PASSWORD`; You.com maps 401/403 (key rejected), 402 (credits exhausted), 429 (rate limit), other statuses as `HTTP <status>`.
+- Result counts are constrained to `[1, 50]`. Raw SearXNG fields (`engine`, `score`, `suggestions`, …) are not returned.
+- URL dedup is conservative (scheme/host case, default port, fragment); no re-ranking or score normalization.
 
 ## Related Features
 

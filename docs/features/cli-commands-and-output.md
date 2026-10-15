@@ -45,7 +45,7 @@ This feature provides local command-line operation for crawl and search workflow
   1. `./.env`
   2. `~/.config/searxncrawl/.env`
   3. Auto-copy from `.env.example` when available (`crawler/env.py:39`-`crawler/env.py:63`)
-- Important env vars: `SEARXNG_URL`, `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/cli.py:494`-`crawler/cli.py:496`).
+- Important env vars for `search`: `SEARXNG_URL`, `SEARXNG_USERNAME`, `SEARXNG_PASSWORD`, `YDC_API_KEY`, `SEARCH_RESULT_FIELDS` (read by `crawler.search_orchestrator`).
 - Packaging entrypoints: `crawl`, `search` scripts (`pyproject.toml:23`, `pyproject.toml:24`).
 
 ## Edge Cases & Limitations
@@ -53,6 +53,7 @@ This feature provides local command-line operation for crawl and search workflow
 - Site crawl mode accepts only one URL and exits with error otherwise (`crawler/cli.py:321`-`crawler/cli.py:323`).
 - Non-JSON crawl output fails hard if all pages fail; JSON output can still emit failure payloads (`crawler/cli.py:365`-`crawler/cli.py:376`).
 - Output target semantics vary by count/path suffix (single file vs directory mode) (`crawler/cli.py:170`-`crawler/cli.py:219`).
+- `search` depends on the configured external providers (SearXNG and/or You.com); with none configured, or when all selected providers fail, it logs the error and exits with code 1.
 
 ## Related Features
 

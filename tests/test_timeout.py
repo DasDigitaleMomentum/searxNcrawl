@@ -9,7 +9,7 @@ import pytest
 
 import crawler
 import crawler.site as site_module
-from crawler import mcp_server
+from crawler import mcp_server, search_orchestrator
 
 
 def _doc(url: str, status: str = "success", error_message: str | None = None):
@@ -152,13 +152,16 @@ async def test_search_retries_on_request_error_with_exponential_backoff(
             }
 
     class DummyClient:
+        def __init__(self, **kwargs):
+            pass
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, path, params=None):
+        async def get(self, url, *, params=None, headers=None, auth=None):
             state["calls"] += 1
             if state["calls"] == 1:
                 req = httpx.Request("GET", "https://searx.test/search")
@@ -168,8 +171,9 @@ async def test_search_retries_on_request_error_with_exponential_backoff(
     async def fake_sleep(seconds: float):
         state["sleeps"].append(seconds)
 
-    monkeypatch.setattr(mcp_server, "_get_searxng_client", lambda: DummyClient())
-    monkeypatch.setattr(mcp_server.asyncio, "sleep", fake_sleep)
+    monkeypatch.setenv("SEARXNG_URL", "https://searx.test")
+    monkeypatch.setattr(search_orchestrator.httpx, "AsyncClient", DummyClient)
+    monkeypatch.setattr(search_orchestrator.asyncio, "sleep", fake_sleep)
 
     out = await mcp_server.search(query="retry-me", max_retries=3)
     payload = json.loads(out)
@@ -195,21 +199,25 @@ async def test_search_does_not_retry_on_http_status_error(
             raise httpx.HTTPStatusError("boom", request=req, response=self)
 
     class DummyClient:
+        def __init__(self, **kwargs):
+            pass
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, path, params=None):
+        async def get(self, url, *, params=None, headers=None, auth=None):
             state["calls"] += 1
             return DummyResponse()
 
     async def fake_sleep(seconds: float):
         state["sleeps"] += 1
 
-    monkeypatch.setattr(mcp_server, "_get_searxng_client", lambda: DummyClient())
-    monkeypatch.setattr(mcp_server.asyncio, "sleep", fake_sleep)
+    monkeypatch.setenv("SEARXNG_URL", "https://searx.test")
+    monkeypatch.setattr(search_orchestrator.httpx, "AsyncClient", DummyClient)
+    monkeypatch.setattr(search_orchestrator.asyncio, "sleep", fake_sleep)
 
     out = await mcp_server.search(query="status-error", max_retries=3)
     payload = json.loads(out)

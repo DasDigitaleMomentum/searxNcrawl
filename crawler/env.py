@@ -57,7 +57,7 @@ def load_config() -> None:
             shutil.copy(example_file, CONFIG_ENV_FILE)
             logging.info(
                 "Created config file at %s from .env.example. "
-                "Please edit it with your SEARXNG_URL.",
+                "Please edit it and set SEARXNG_URL and/or YDC_API_KEY.",
                 CONFIG_ENV_FILE,
             )
             load_dotenv(CONFIG_ENV_FILE)

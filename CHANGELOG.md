@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Multi-provider search: CLI `search` and MCP `search` query every configured provider (SearXNG, You.com) in parallel and return one merged list (conservative URL dedup, round-robin, results found by several providers first). A partial failure still returns the other providers' results.
+- You.com provider, enabled by `YDC_API_KEY` (keyed API only; queries go to You.com, US).
+- Provider selection per call: MCP `providers` parameter, CLI `--providers searxng,youcom`.
+- `providers` field on every result; the CLI markdown output shows it as a `**Sources:**` line.
+
+### Changed
+- **Breaking:** no `SEARXNG_URL` default any more (code, `docker-compose.yml`, `.env.example`); SearXNG is active only when `SEARXNG_URL` is set. Setups that relied on `http://localhost:8888` must set it explicitly.
+- **Breaking:** `SEARXNG_URL` must be an http(s) URL without embedded credentials (`https://user:pw@host` and scheme-less values are rejected with a warning); use `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` instead, both or neither.
+- **Breaking:** unset `SEARCH_RESULT_FIELDS` now returns the normalized fields `title,url,content,publishedDate,providers`; the raw SearXNG payload passthrough ends, so fields such as `engine`, `score`, `suggestions`, `answers` are gone. Add `providers` to an existing `SEARCH_RESULT_FIELDS` to show attribution.
+- **Breaking:** the CLI "Related searches" line (from SearXNG `suggestions`) is removed.
+- Search errors are short per-provider reasons without secrets, URLs or response bodies (a SearXNG non-401 status no longer includes the response body).
+
 ## [0.31.0] - 2026-10-09
 
 ### Added

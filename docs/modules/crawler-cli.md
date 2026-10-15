@@ -27,7 +27,7 @@ version: 1.0
 | `crawler-env` | module | Shared `.env` config loading with CWD → user-config fallback (`crawler/env.py`). |
 | `crawler-package-api` | module | Uses async crawl functions for single/multi/site crawl execution (`crawler/cli.py:421`). |
 | `crawler-document-pipeline` | module | Uses `CrawledDocument` for type-safe output transforms (`crawler/cli.py:65`). |
-| `httpx` | library | Performs SearXNG HTTP requests for `search` command (`crawler/cli.py:16`). |
+| `crawler.search_orchestrator` | module | Multi-provider search and result serializer for the `search` command (`crawler/cli.py:18`, `crawler/cli.py:20`). |
 | `argparse` | library | Defines command interfaces and help text (`crawler/cli.py:5`). |
 
 ## Structure
@@ -42,7 +42,7 @@ version: 1.0
 |--------|------|------------|----------|---------|
 | `_setup_logging` | function | internal | `crawler/cli.py:68` | Standardized logging initialization with verbose toggle. |
 | `_strip_markdown_links` | function | internal | `crawler/cli.py:77` | Removes markdown links + bare URLs for cleaner output. |
-| `_format_search_markdown` | function | internal | `crawler/cli.py:88` | Converts search JSON payload into readable markdown summary. |
+| `_format_search_markdown` | function | internal | `crawler/cli.py:49` | Converts the search envelope into a markdown summary with a `**Sources:**` line per result. |
 | `_doc_to_dict` | function | internal | `crawler/cli.py:138` | Serializes `CrawledDocument` for JSON output. |
 | `_references_to_list` | function | internal | `crawler/cli.py:154` | Serializes only `CrawledDocument.references` as a JSON array for `--links-only --json` output. |
 | `_format_references` | function | internal | `crawler/cli.py:162` | Renders references as `[N] label - href` lines for links-only markdown output. |
@@ -54,23 +54,22 @@ version: 1.0
 | `_parse_capture_args` | function | internal | `crawler/cli.py` | Defines isolated session-capture CLI arguments. |
 | `_run_capture_async` | function | internal | `crawler/cli.py` | Executes isolated session-capture flow and maps success/timeout/abort to deterministic exit codes. |
 | `capture_main` | function | public | `crawler/cli.py` | Entrypoint for `crawl-capture` script. |
-| `_parse_search_args` | function | internal | `crawler/cli.py:780` | Defines search command options and examples. |
-| `_run_search_async` | function | internal | `crawler/cli.py:871` | Executes SearXNG query and formats markdown/json output. |
-| `search_main` | function | public | `crawler/cli.py:963` | Entrypoint for `search` script. |
+| `_parse_search_args` | function | internal | `crawler/cli.py:733` | Defines search command options (incl. `--providers`) and examples. |
+| `_run_search_async` | function | internal | `crawler/cli.py:836` | Runs the orchestrator (single attempt per provider) and formats markdown/json output. |
+| `search_main` | function | public | `crawler/cli.py:883` | Entrypoint for `search` script. |
 
 ## Data Flow
 
 1. Module import invokes shared `crawler.env.load_config()` to establish env variables.
 2. Entrypoint parses args and sets logging.
-3. Crawl command dispatches to package crawl APIs; capture command dispatches to isolated session-capture runtime; search command calls SearXNG via httpx.
+3. Crawl command dispatches to package crawl APIs; capture command dispatches to isolated session-capture runtime; search command calls `crawler.search_orchestrator.search` (SearXNG and/or You.com).
 4. Results are transformed and emitted to stdout/files with optional link stripping or links-only extraction.
 5. Exit code reflects success/failure conditions.
 
 ## Configuration
 
 - Environment variables read:
-  - `SEARXNG_URL` (default `http://localhost:8888`) (`crawler/cli.py:494`)
-  - `SEARXNG_USERNAME`, `SEARXNG_PASSWORD` (`crawler/cli.py:495`-`crawler/cli.py:496`)
+  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`.
 - `.env` search order and auto-seeding behavior implemented in shared `crawler/env.py` (see [crawler-env](crawler-env.md)).
 - Crawl CLI exposes `--dedup-mode` with choices `exact|off` (default: `exact`).
 - Crawl CLI exposes `--storage-state <path>` to enable authenticated crawling via Playwright storage state JSON.

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `searxncrawl setup` registers the MCP server with the installed coding agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude Desktop) in one step. It shows each change, asks before applying it (`--yes` skips the prompt), backs up every file it touches, updates instead of duplicating on re-runs, and `setup --remove` unregisters again.
+
 ### Fixed
 - Every crawl failed with `CrawlerRunConfig.__init__() got an unexpected keyword argument 'flatten_shadow_dom'` when the code ran against Crawl4AI < 0.8.5 (e.g. a stale virtualenv). `flatten_shadow_dom` is now passed only if the installed Crawl4AI supports it; otherwise a warning is logged and shadow DOM content is skipped.
 - Shadow DOM flattening corrupted pages whose text contains `<`, `>` or `&`: Crawl4AI's `flatten_shadow_dom.js` writes text nodes back unescaped, so text such as `<details>` was re-parsed as markup. Closing tags vanished from HTML code samples, and the broken tree defeated `target_elements`, pulling site navigation into the markdown (MDN: 38 kB with nav instead of 22 kB of article). The script is now patched at import to escape text nodes.

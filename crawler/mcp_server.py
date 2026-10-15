@@ -632,6 +632,11 @@ async def search(
 
 def main():
     """CLI entry point for running the MCP server."""
+    if sys.argv[1:2] == ["setup"]:
+        from .setup import main as setup_main
+
+        sys.exit(setup_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Run the web crawler & search MCP server.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -642,6 +647,9 @@ Environment Variables:
     SEARXNG_PASSWORD  Optional basic auth password
 
 Examples:
+    # Register the server with your installed coding agents
+    searxncrawl setup
+
     # STDIO transport (default, for Claude Desktop)
     python -m crawler.mcp_server
 

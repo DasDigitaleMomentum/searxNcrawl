@@ -41,6 +41,16 @@ jobs:
             exit 1
           fi
 
+      - name: Check that server.json matches the project version
+        run: |
+          version="$(uv version --short)"
+          for v in "$(jq -r .version server.json)" "$(jq -r '.packages[0].version' server.json)"; do
+            if [ "$v" != "$version" ]; then
+              echo "::error::server.json version '$v' does not match pyproject version '$version'"
+              exit 1
+            fi
+          done
+
       - name: Build sdist and wheel
         run: uv build
 

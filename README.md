@@ -25,9 +25,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Claude Code calls the searxNcrawl search tool, then crawls the top result and gets clean Markdown back" width="100%">
+  <img src="docs/assets/demo.gif" alt="An MCP client starts uvx searxncrawl, calls search for crawl4ai quick start, then crawls the top result and receives clean Markdown" width="100%">
   <br>
-  <sub>Claude Code with searxNcrawl: <code>search</code> through SearXNG, then <code>crawl</code> the best hit into Markdown. Recorded against a local SearXNG.</sub>
+  <sub>A real MCP client session (fastmcp) against <code>uvx searxncrawl</code> 0.31.0 and a local SearXNG: <code>search</code>, then <code>crawl</code> the top hit into Markdown. Output is shortened for display. Reproduce it with <a href="docs/assets/demo/demo.tape"><code>docs/assets/demo/</code></a>.</sub>
 </p>
 
 **searxNcrawl** is an open-source MCP server and CLI toolkit that gives AI agents web search and clean Markdown crawling, built on [Crawl4AI](https://github.com/unclecode/crawl4ai). Search queries the configured providers, [SearXNG](https://github.com/searxng/searxng) and/or [You.com](https://you.com), in parallel and merges the results. It runs on your own hardware, needs no API key with SearXNG and succeeds `searxng-mcp`.

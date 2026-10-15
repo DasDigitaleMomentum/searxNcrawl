@@ -16,7 +16,7 @@ uvx searxncrawl setup --agent cursor --agent vscode                  # only thes
 uvx searxncrawl setup --remove                                       # unregister again
 ```
 
-Restart the agents afterwards. `setup` is not in the 0.31.0 release on PyPI; until the next release, replace `uvx searxncrawl` with `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl`.
+Restart the agents afterwards.
 
 ## Start the server
 

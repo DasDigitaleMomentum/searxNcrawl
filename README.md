@@ -55,9 +55,6 @@ SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
 
 You need [uv](https://docs.astral.sh/uv/) and, for the `search` tool, at least one search provider: a SearXNG instance with JSON output enabled and/or a You.com API key (`YDC_API_KEY`). No SearXNG yet? [Start one with Docker](docs/usage/installation.md#run-searxng-locally). Crawling works without either.
 
-> [!NOTE]
-> `searxncrawl setup` and the You.com provider are merged but not yet released; PyPI 0.31.0 searches SearXNG only. Until the next release, run the development version with `uvx --from git+https://github.com/DasDigitaleMomentum/searxNcrawl searxncrawl`.
-
 ### Add it to your agent
 
 **One step for every agent on your machine**

@@ -164,8 +164,11 @@ class TestFastMcpHttpGuard:
         )
         response = self._request(app, host=host, origin=origin)
 
-        # GET reaches normal MCP request validation (406), not either guard.
-        assert response.status_code == 406
+        # GET reaches normal MCP request validation, not either guard (421/403):
+        # FastMCP 3 answers 406 (Accept), FastMCP 4 checks the session first (400).
+        assert response.status_code in (400, 406)
+        if response.status_code == 400:
+            assert response.json()["error"]["message"] == "Bad Request: Missing session ID"
 
 
 class TestTransportEncoding:

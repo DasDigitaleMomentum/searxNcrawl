@@ -67,6 +67,13 @@ include = ["crawler*"]
 requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.uv]
+# nltk is a crawl4ai dependency with an unpatched advisory (GHSA-8mgp-746c-j5xp,
+# all versions <= 3.10.3). crawl4ai imports it only inside chunking and legacy
+# helpers that searxNcrawl never calls, so it is excluded from the lockfile.
+# Remove this exclusion once nltk ships a fixed release.
+exclude-dependencies = ["nltk"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

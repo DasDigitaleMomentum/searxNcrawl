@@ -47,7 +47,21 @@ SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
 
 ## Quick Start
 
-Pick your setup:
+### Register with your coding agents (one step)
+
+```bash
+uvx searxncrawl setup
+```
+
+`setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop, asks for your SearXNG URL (suggesting `$SEARXNG_URL`), shows the exact change for each agent and applies it only after you confirm. It uses the agent's own `mcp add` CLI where one exists and otherwise edits the agent's JSON config. Every file it touches is backed up next to the original as `<file>.searxncrawl-backup-<timestamp>`. Re-running updates the entry instead of adding a second one.
+
+```bash
+uvx searxncrawl setup --yes --searxng-url http://your-searxng:8888   # non-interactive
+uvx searxncrawl setup --agent cursor --agent vscode                  # only these agents
+uvx searxncrawl setup --remove                                       # unregister again
+```
+
+Restart the agents afterwards. Prefer to run the server yourself? Pick your setup:
 
 ### Docker Compose
 
@@ -220,6 +234,8 @@ docker compose up --build
 ```
 
 #### MCP client configuration
+
+`uvx searxncrawl setup` writes the configuration below for you (see [Quick Start](#quick-start)). To do it by hand:
 
 **With uvx (no clone, no venv):**
 

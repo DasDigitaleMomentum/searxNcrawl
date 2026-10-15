@@ -29,8 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md LICENSE /app/
 COPY crawler /app/crawler
 
+# nltk (pulled in by crawl4ai) is unused and has an unpatched advisory, see pyproject.toml [tool.uv].
 RUN pip install --no-cache-dir -U pip \
     && pip install --no-cache-dir -e . \
+    && pip uninstall -y nltk \
     && python -m playwright install --with-deps chromium
 
 CMD ["python", "-m", "crawler.mcp_server"]

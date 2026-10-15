@@ -25,6 +25,7 @@ searxNcrawl is an MCP server, CLI and Python package for web search through Sear
 | `docs/usage/` | User guides linked from the README |
 | `docs/modules/`, `docs/features/` | Architecture notes per module and feature |
 | `server.json` | MCP Registry metadata |
+| `mcpb/` | MCPB bundle source (Smithery, Claude Desktop) |
 
 ## Commands
 
@@ -48,7 +49,7 @@ uv run python -m crawler.mcp_server         # MCP server over STDIO
 
 ## Releases
 
-1. Bump `version` in `pyproject.toml` and both `version` fields in `server.json`; keep its `environmentVariables` in line with the released code.
+1. Bump `version` in `pyproject.toml`, both `version` fields in `server.json`, `version` in `mcpb/manifest.json` and the `searxncrawl==` pin in `mcpb/pyproject.toml`; keep the environment variables in `server.json` and `mcpb/manifest.json` in line with the released code.
 2. Move the `Unreleased` changelog entries under the new version.
 3. Publish a GitHub release tagged `v<version>`. The release workflow checks both versions and publishes to PyPI.
-4. Publish the registry entry with `mcp-publisher login github` and `mcp-publisher publish` (see [MCP Registry](docs/registry.md)).
+4. Publish the registry entry with `mcp-publisher login github` and `mcp-publisher publish`, pack the MCPB bundle and attach it to the release (see [MCP Registry](docs/registry.md)).

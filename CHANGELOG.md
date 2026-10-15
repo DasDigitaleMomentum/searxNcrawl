@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-15
+
 **Upgrade note:** existing SearXNG-only setups must set `SEARXNG_URL` explicitly; there is no `http://localhost:8888` default any more. `SEARXNG_URL` must not embed credentials (`https://user:pw@host` is rejected); use `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` instead.
 
 ### Added
@@ -24,9 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** unset `SEARCH_RESULT_FIELDS` now returns the normalized fields `title,url,content,publishedDate,providers`; the raw SearXNG payload passthrough ends, so fields such as `engine`, `score`, `suggestions`, `answers` are gone. Add `providers` to an existing `SEARCH_RESULT_FIELDS` to show attribution.
 - **Breaking:** the CLI "Related searches" line (from SearXNG `suggestions`) is removed.
 - Search errors are short per-provider reasons without secrets, URLs or response bodies (a SearXNG non-401 status no longer includes the response body).
+- The Docker image is based on `python:3.14-slim` instead of `python:3.11-slim`.
+- README rewritten around a demo, one-line agent setup and a comparison; installation, MCP server, CLI and Python API reference moved to `docs/usage/`.
 - HTTP 429 from a search provider is retried once when `Retry-After` is at most 5 s and attempts remain (MCP `max_retries`; the CLI makes a single attempt and never retries). Otherwise the reason ends with `retry after Ns` or `try again later`.
 
 ### Fixed
+- Pages could be captured mid-reload: the default config ran `window.location.reload()` in `js_code`, which Crawl4AI executes after `wait_for` without waiting for the new document. On docs.python.org this returned only `<head>` and failed as "Blocked by anti-bot protection". The reload now runs as a Playwright `after_goto` hook (`page.reload(wait_until="load")`), so `wait_for` and capture see the reloaded page. Custom configs and `js_code` overrides keep their previous behaviour (no reload).
+- Content rendered into shadow DOM (e.g. MDN code examples) was missing from the markdown; `flatten_shadow_dom` is now enabled. Raises the minimum Crawl4AI version to 0.8.5, the first release with this option.
+- Code samples lost `<` and `</` in the markdown: `PruningContentFilter` dropped Prism/highlight.js/CodeMirror token spans holding only those characters, so `<details>` became `details`. `<pre>`, `<code>` and CodeMirror's `.cm-content` are now exempt from pruning. Raises the minimum Crawl4AI version to 0.9.1, the first release with `preserve_tags`/`preserve_classes`.
 - Every crawl failed with `CrawlerRunConfig.__init__() got an unexpected keyword argument 'flatten_shadow_dom'` when the code ran against Crawl4AI < 0.8.5 (e.g. a stale virtualenv). `flatten_shadow_dom` is now passed only if the installed Crawl4AI supports it; otherwise a warning is logged and shadow DOM content is skipped.
 - Shadow DOM flattening corrupted pages whose text contains `<`, `>` or `&`: Crawl4AI's `flatten_shadow_dom.js` writes text nodes back unescaped, so text such as `<details>` was re-parsed as markup. Closing tags vanished from HTML code samples, and the broken tree defeated `target_elements`, pulling site navigation into the markdown (MDN: 38 kB with nav instead of 22 kB of article). The script is now patched at import to escape text nodes.
 
@@ -41,8 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `searxncrawl` console script as an alias for `crawl-mcp`, so the package name doubles as the MCP server command.
 
 ### Fixed
-- Pages could be captured mid-reload: the default config ran `window.location.reload()` in `js_code`, which Crawl4AI executes after `wait_for` without waiting for the new document. On docs.python.org this returned only `<head>` and failed as "Blocked by anti-bot protection". The reload now runs as a Playwright `after_goto` hook (`page.reload(wait_until="load")`), so `wait_for` and capture see the reloaded page. Custom configs and `js_code` overrides keep their previous behaviour (no reload).
-- Content rendered into shadow DOM (e.g. MDN code examples) was missing from the markdown; `flatten_shadow_dom` is now enabled. Raises the minimum Crawl4AI version to 0.8.5, the first release with this option.
 - Single-page crawls no longer time out on pages without a `<main>` element (e.g. example.com). The `wait_for` condition now accepts any `MAIN_SELECTORS` area (`article`, `[role='main']`, `.markdown-body`, …) with more than 50 characters and falls back to the page body after a 3 s grace period once the document has loaded, instead of waiting for the 30 s page timeout.
 
 ## [0.30.0] - 2026-07-15

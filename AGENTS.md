@@ -4,7 +4,7 @@ Guidance for coding agents (Claude Code, Codex, Cursor, Copilot and others) work
 
 ## Project
 
-searxNcrawl is an MCP server, CLI and Python package for web search through SearXNG and Markdown crawling through Crawl4AI and Playwright. It is published on PyPI as `searxncrawl` and as `io.github.DasDigitaleMomentum/searxncrawl` in the MCP Registry.
+searxNcrawl is an MCP server, CLI and Python package for web search through SearXNG and/or You.com and Markdown crawling through Crawl4AI and Playwright. It is published on PyPI as `searxncrawl` and as `io.github.DasDigitaleMomentum/searxncrawl` in the MCP Registry.
 
 ## Layout
 
@@ -14,6 +14,7 @@ searxNcrawl is an MCP server, CLI and Python package for web search through Sear
 | `crawler/cli.py` | `crawl`, `search` and `crawl-capture` commands |
 | `crawler/__init__.py` | Public Python API (`crawl_page`, `crawl_site` and async variants) |
 | `crawler/config.py` | Crawl4AI run configuration and overrides |
+| `crawler/search_orchestrator.py` | Search providers (SearXNG, You.com), parallel queries and result merging |
 | `crawler/site.py` | Multi-page site crawling |
 | `crawler/markdown_dedup.py` | Removal of repeated Markdown blocks |
 | `crawler/document.py`, `builder.py`, `references.py` | `CrawledDocument` model and Markdown/JSON output |
@@ -38,7 +39,7 @@ uv run python -m crawler.mcp_server         # MCP server over STDIO
 ## Rules
 
 - **Keep stdout clean.** Over STDIO, stdout carries the MCP protocol. Logs and subprocess output go to stderr.
-- **Tests with every change.** Add or update pytest tests for new behaviour and bug fixes. Unit tests must not depend on a live SearXNG instance or external websites.
+- **Tests with every change.** Add or update pytest tests for new behaviour and bug fixes. Unit tests must not depend on a live search provider or external websites.
 - **Lint must pass.** CI runs `ruff check` with the configuration in `pyproject.toml`.
 - **Changelog.** Add user-visible changes under `## [Unreleased]` in `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)).
 - **Commits and PRs.** English, [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:` …). PRs are squash-merged into `main` and need one approval.
@@ -47,7 +48,7 @@ uv run python -m crawler.mcp_server         # MCP server over STDIO
 
 ## Releases
 
-1. Bump `version` in `pyproject.toml` and both `version` fields in `server.json`.
+1. Bump `version` in `pyproject.toml` and both `version` fields in `server.json`; keep its `environmentVariables` in line with the released code.
 2. Move the `Unreleased` changelog entries under the new version.
 3. Publish a GitHub release tagged `v<version>`. The release workflow checks both versions and publishes to PyPI.
 4. Publish the registry entry with `mcp-publisher login github` and `mcp-publisher publish` (see [MCP Registry](docs/registry.md)).

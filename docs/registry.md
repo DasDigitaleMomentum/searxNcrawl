@@ -36,3 +36,5 @@ curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.DasDi
 ## Keep versions in sync
 
 `server.json` has two version fields, the server `version` and `packages[0].version`. Both must equal the `version` in `pyproject.toml`; the release workflow fails if they differ. Bump all three in the release PR.
+
+`server.json` describes the latest PyPI release, so its environment variables follow that release. The first release that ships the You.com provider must add `YDC_API_KEY` (secret, optional) and drop the `http://localhost:8888` default from the `SEARXNG_URL` description, since that default no longer exists on `main`.

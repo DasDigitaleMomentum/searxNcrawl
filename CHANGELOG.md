@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - You.com provider, enabled by `YDC_API_KEY` (keyed API only; queries go to You.com, US). Requests use `POST /v1/search` with a JSON body. `safesearch` maps to `off`/`moderate`/`strict`; `language` maps to You.com's supported codes (`en-us` → `EN`; unsupported codes such as `zh` search without a language filter instead of failing with HTTP 422); pages beyond 10 return no You.com results; `content` falls back to the first snippet when the description is empty. HTTP 403 is reported as a missing key scope, separate from 401.
 - Provider selection per call: MCP `providers` parameter, CLI `--providers searxng,youcom`.
 - `providers` field on every result; the CLI markdown output shows it as a `**Sources:**` line.
+- `searxncrawl setup` registers the MCP server with the installed coding agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude Desktop) in one step. It shows each change, asks before applying it (`--yes` skips the prompt), backs up every file it touches, updates instead of duplicating on re-runs, and `setup --remove` unregisters again.
 
 ### Changed
 - **Breaking:** no `SEARXNG_URL` default any more (code, `docker-compose.yml`, `.env.example`); SearXNG is active only when `SEARXNG_URL` is set. Setups that relied on `http://localhost:8888` must set it explicitly.

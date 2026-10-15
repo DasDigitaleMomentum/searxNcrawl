@@ -162,13 +162,14 @@ Hosted search and crawl APIs are quick to start with, but every call goes throug
 |  | searxNcrawl | [Firecrawl](https://github.com/firecrawl/firecrawl) | [Tavily](https://github.com/tavily-ai/tavily-mcp) | [Exa](https://github.com/exa-labs/exa-mcp-server) |
 | --- | --- | --- | --- | --- |
 | Search and crawl run on your hardware | ✅ Python package or Docker; You.com queries go to You.com | ✅ Self-host stack (Docker Compose), or hosted API | ❌ Hosted API | ❌ Hosted API |
-| API key | Not needed with SearXNG; You.com needs one | Needed for the hosted API | Needed | Optional, anonymous use is rate-limited |
-| Cost per call | None with SearXNG; You.com per its plans | Hosted plans; self-hosting is free | Hosted plans | Hosted plans |
-| Search backend | Your SearXNG (the engines you enable) and/or You.com | Firecrawl search API | Tavily's search API | Exa's search index |
+| API key | Not needed with SearXNG; You.com needs one | Hosted API: needed. Self-hosted: not by default | Needed | Optional, anonymous use is rate-limited |
+| Cost per call | None with SearXNG; You.com per its plans | Hosted: free monthly credits, then paid credits. Self-hosted: none | Free monthly credits, then paid credits | Free monthly credits, then paid per request |
+| Search backend | Your SearXNG (the engines you enable) and/or You.com | Hosted: Firecrawl's search. Self-hosted: SearXNG if configured, otherwise DuckDuckGo | Tavily's search API | Exa's search index |
 | Licence | MIT | AGPL-3.0 | MCP server MIT, API proprietary | MCP server MIT, API proprietary |
-| Firecrawl-compatible API | Planned | — | — | — |
 
-Where the others are a better fit: if you do not want to run SearXNG and a browser yourself, a hosted API is less work, and Exa's semantic search index or Firecrawl's extraction features go beyond what searxNcrawl does today. Comparison based on each project's public README in October 2026; corrections are welcome. Firecrawl is a trademark of its owner; searxNcrawl is not affiliated with it.
+Self-hosted Firecrawl can search through SearXNG too; it runs as a multi-service stack (API, Playwright service, Redis, RabbitMQ, PostgreSQL and more), while searxNcrawl is a single Python process with Chromium, plus your SearXNG instance if you use one. A Firecrawl-compatible API for searxNcrawl is [planned](#roadmap).
+
+Where the others are a better fit: if you do not want to run a search provider and a browser yourself, a hosted API is less work, and Exa's semantic search index or Firecrawl's extraction features go beyond what searxNcrawl does today. Comparison based on each project's public repository and documentation in October 2026; corrections are welcome. Firecrawl is a trademark of its owner; searxNcrawl is not affiliated with it.
 
 ## FAQ
 

@@ -17,7 +17,12 @@ load_config()
 
 from . import search_orchestrator
 from .document import CrawledDocument
-from .search_orchestrator import SearchProviderError, serialize_search_results
+from .markdown_dedup import demote_headings
+from .search_orchestrator import (
+    SearchProviderError,
+    crawl_result_pages,
+    serialize_search_results,
+)
 from .session_capture import (
     CdpSessionEntry,
     capture_session_async,
@@ -81,6 +86,12 @@ def _format_search_markdown(data: Dict[str, Any]) -> str:
         lines.append("")
         if content:
             lines.append(content)
+            lines.append("")
+        if result.get("markdown"):
+            lines.append(demote_headings(result["markdown"], 2))
+            lines.append("")
+        elif result.get("crawl_error"):
+            lines.append(f"**Crawl error:** {result['crawl_error']}")
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -754,6 +765,9 @@ Examples:
 
   # Output to file
   search "docker compose" --json -o results.json
+
+  # Results together with the Markdown of each result page
+  search "crawl4ai release notes" --max-results 3 --include-content
 """,
     )
 
@@ -811,6 +825,11 @@ Examples:
         ),
     )
     parser.add_argument(
+        "--include-content",
+        action="store_true",
+        help="Also crawl each result page and include its Markdown",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
@@ -849,7 +868,8 @@ async def _run_search_async(args: argparse.Namespace) -> int:
             max_retries=1,
             providers=args.providers,
         )
-        data = serialize_search_results(args.query, results)
+        documents = await crawl_result_pages(results) if args.include_content else None
+        data = serialize_search_results(args.query, results, documents)
 
         logging.info("Found %d results", data["number_of_results"])
 

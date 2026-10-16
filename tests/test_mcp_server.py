@@ -195,3 +195,15 @@ def test_resolve_log_level_unset_defaults_to_info(
 ) -> None:
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     assert _resolve_log_level() == ("info", 20)
+
+
+def test_markdown_output_nests_page_headings_under_url_header() -> None:
+    doc = _doc()
+    doc.markdown = "# Page\n## Section\n```\n# code\n```"
+
+    output = mcp_server._format_output([doc, doc], mcp_server.OutputFormat.markdown)
+
+    h1_lines = [line for line in output.splitlines() if line.startswith("# ")]
+    assert h1_lines == ["# https://example.com", "# code"] * 2
+    assert "## Page\n### Section\n```\n# code\n```" in output
+    assert doc.markdown.startswith("# Page")

@@ -21,6 +21,7 @@ This feature provides web search over a fixed set of providers, SearXNG and You.
 2. User invokes the `search` CLI command or MCP `search` tool with a query, optional filters and an optional provider subset (`--providers` / `providers`).
 3. All selected providers are queried in parallel.
 4. Results are merged, bounded to `max_results` and returned as markdown (CLI default, with a `**Sources:**` line per result) or JSON.
+5. Optional (`include_content` / `--include-content`): every result page is crawled and its Markdown is added to the result.
 
 ### Technical Flow
 
@@ -30,14 +31,15 @@ This feature provides web search over a fixed set of providers, SearXNG and You.
    - `_search_youcom`: POST `https://ydc-index.io/v1/search` with `X-API-Key`, the You.com User-Agent and a JSON body: `query`, `count`, `safesearch` (`off`/`moderate`/`strict`), optional `language` (mapped to You.com's language enum, falling back to the primary subtag, otherwise omitted), `freshness`, `offset` (pages 2–10; a page beyond 10 returns no results without a request). `content` falls back to the first non-empty snippet when the description is empty.
    - Both use `_request_json`: fixed 30 s timeout per attempt, retry with backoff on request errors (timeouts included). HTTP status errors are not retried, except one retry on 429 when `Retry-After` is at most 5 s and attempts remain; otherwise the 429 reason ends with `retry after Ns` or `try again later`.
 3. `_merge_results` merges round-robin in the fixed order `searxng`, `youcom`, with conservative URL dedup; results from several providers come first.
-4. `serialize_search_results` builds `{query, number_of_results, results}` and applies `SEARCH_RESULT_FIELDS`.
-5. A failed provider is logged as a warning; if every selected provider fails, `SearchProviderError` lists one sanitized reason per provider.
+4. With `include_content`, `crawl_result_pages` crawls every result URL through `crawl_pages_async` (concurrency 3, 15 s per page; Crawl4AI is imported only then).
+5. `serialize_search_results` builds `{query, number_of_results, results}`, applies `SEARCH_RESULT_FIELDS` and, given crawled documents, adds `markdown` or `crawl_error` per result.
+6. A failed provider is logged as a warning; if every selected provider fails, `SearchProviderError` lists one sanitized reason per provider.
 
 ## Implementation
 
 | Module | Symbols | Role |
 |--------|---------|------|
-| `crawler/search_orchestrator.py` | `search`, `SearchResult`, `SearchProviderError`, `ProviderConfig`, `configured_providers`, `_resolve_provider_config`, `_select_providers`, `_request_json`, `_search_searxng`, `_search_youcom`, `_merge_results`, `serialize_search_results`, `_parse_search_result_fields` | Provider configuration and selection, provider calls, merge, shared serializer. |
+| `crawler/search_orchestrator.py` | `search`, `SearchResult`, `SearchProviderError`, `ProviderConfig`, `configured_providers`, `_resolve_provider_config`, `_select_providers`, `_request_json`, `_search_searxng`, `_search_youcom`, `_merge_results`, `crawl_result_pages`, `serialize_search_results`, `_parse_search_result_fields` | Provider configuration and selection, provider calls, merge, shared serializer. |
 | [crawler-cli](../modules/crawler-cli.md) | `_run_search_async`, `_parse_search_args`, `_format_search_markdown`, `search_main` | CLI search UX (single attempt per provider) and output formatting. |
 | [crawler-mcp-server](../modules/crawler-mcp-server.md) | `search` | MCP search tool (`max_retries` per provider); returns the envelope or `{"error", "query"}` JSON. |
 

@@ -16,6 +16,7 @@ crawl https://example.com --remove-links
 search "python tutorials"
 search "Rezepte" --language de --max-results 5
 search "python tutorials" --providers searxng
+search "crawl4ai release notes" --max-results 3 --include-content
 
 # Session capture for authenticated crawling
 crawl-capture --start-url https://example.com/login \

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Search with page content in one call: MCP `search(..., include_content=true)` and CLI `search --include-content` crawl every result page and add its Markdown as `markdown`, or `crawl_error` when a page fails. The search results are returned either way.
+
 ### Fixed
 - MCP `crawl` and `crawl_site` Markdown output: headings inside each page are shifted down one level (capped at `######`, code blocks untouched), so they no longer collide with the `# <url>` header of each page. The JSON `markdown` field is unchanged.
 

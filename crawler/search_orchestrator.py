@@ -529,13 +529,35 @@ def _parse_search_result_fields() -> Optional[list[str]]:
     return fields
 
 
+async def crawl_result_pages(results: Sequence[SearchResult]) -> list[Any]:
+    """Crawl every result URL to Markdown; one document per result, in order."""
+    if not results:
+        return []
+    # Local import: plain searches never load Crawl4AI.
+    from . import crawl_pages_async
+
+    # Same per-page timeout as the MCP crawl tool, so a search stays responsive.
+    return await crawl_pages_async([result.url for result in results], timeout=15)
+
+
 def serialize_search_results(
-    query: str, results: Sequence[SearchResult]
+    query: str,
+    results: Sequence[SearchResult],
+    documents: Optional[Sequence[Any]] = None,
 ) -> dict[str, Any]:
-    """Build the search envelope, applying SEARCH_RESULT_FIELDS to each result."""
+    """Build the search envelope, applying SEARCH_RESULT_FIELDS to each result.
+
+    ``documents`` (from ``crawl_result_pages``) adds ``markdown`` to each result,
+    or ``crawl_error`` when its page could not be crawled.
+    """
     fields = _parse_search_result_fields()
     items = [asdict(result) for result in results]
     if fields is not None:
         field_set = set(fields)
         items = [{k: v for k, v in item.items() if k in field_set} for item in items]
+    for item, doc in zip(items, documents or ()):
+        if doc.status == "success":
+            item["markdown"] = doc.markdown
+        else:
+            item["crawl_error"] = doc.error_message or "crawl failed"
     return {"query": query, "number_of_results": len(items), "results": items}

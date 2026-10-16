@@ -97,6 +97,7 @@ Search the web via the configured providers (SearXNG and/or You.com). All config
 | `max_results` | `int`      | `10`     | Max results (1–50)                                    |
 | `max_retries` | `int`      | `3`      | Max attempts per provider for transient request errors (timeouts included) |
 | `providers`  | `List[str]` | `null`   | Subset of configured providers: `"searxng"`, `"youcom"` (default: all configured) |
+| `include_content` | `bool` | `false` | Also crawl every result page and add its Markdown to the result (see below) |
 
 ### Examples
 
@@ -115,6 +116,9 @@ search(query="cute cats", categories=["images"])
 
 # In German
 search(query="Rezepte", language="de")
+
+# Results together with the Markdown of each result page
+search(query="crawl4ai release notes", max_results=3, include_content=True)
 ```
 
 ### Response (JSON)
@@ -135,4 +139,6 @@ search(query="Rezepte", language="de")
 }
 ```
 
-`SEARCH_RESULT_FIELDS` limits the fields per result (unset: all five fields above). If some providers fail, the others' results are returned. If all selected providers fail, or none is configured, the response is `{"error": "...", "query": "..."}` with a short reason per provider, e.g. `All selected search providers failed: searxng: request failed; youcom: API key rejected, check YDC_API_KEY`.
+The CLI `search --include-content` prints each page below its result with headings shifted down two levels, so `##` lines are always results. With `include_content=true` each result page is crawled like `crawl` does it (3 pages at a time, 15 s timeout per page, Markdown deduplicated) and the result gets one more field: `markdown` with the page content, or `crawl_error` with the reason if the page could not be crawled. The other results are returned either way. Crawling adds time to the call: plan for up to 15 s per three results.
+
+`SEARCH_RESULT_FIELDS` limits the fields per result (unset: all five fields above); it does not remove `markdown` or `crawl_error`. If some providers fail, the others' results are returned. If all selected providers fail, or none is configured, the response is `{"error": "...", "query": "..."}` with a short reason per provider, e.g. `All selected search providers failed: searxng: request failed; youcom: API key rejected, check YDC_API_KEY`.

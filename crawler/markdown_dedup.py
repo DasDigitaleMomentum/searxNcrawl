@@ -1,4 +1,4 @@
-"""Markdown deduplication helpers."""
+"""Markdown post-processing helpers: deduplication and heading demotion."""
 
 from __future__ import annotations
 
@@ -7,6 +7,50 @@ import re
 from typing import Dict, List, Literal, Tuple
 
 DedupMode = Literal["exact", "off"]
+
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_ATX_HEADING_RE = re.compile(r"^( {0,3})(#{1,6})(?=[ \t]|$)")
+
+
+def demote_headings(markdown: str, levels: int) -> str:
+    """Shift ATX headings down by ``levels`` (capped at h6), outside fenced code.
+
+    Lets crawled pages nest under an output's own headings. A fence that never
+    closes (Crawl4AI emits these) is read as text, so later headings still shift.
+    """
+    lines = markdown.split("\n")
+    plain: set[int] = set()
+    while True:
+        result, unclosed = _demote_lines(lines, levels, plain)
+        if unclosed is None:
+            return "\n".join(result)
+        plain.add(unclosed)
+
+
+def _demote_lines(
+    lines: List[str], levels: int, plain: set[int]
+) -> Tuple[List[str], int | None]:
+    """One pass; returns the lines and the index of an unclosed fence, if any."""
+    result = list(lines)
+    fence, opened_at = "", 0
+    for i, line in enumerate(lines):
+        match = None if i in plain else _FENCE_RE.match(line)
+        if match:
+            marker = match.group(1)
+            if not fence:
+                fence, opened_at = marker, i
+            elif (
+                marker[0] == fence[0]
+                and len(marker) >= len(fence)
+                and not line.strip().strip(marker[0])
+            ):
+                fence = ""
+            continue
+        if not fence:
+            result[i] = _ATX_HEADING_RE.sub(
+                lambda m: m.group(1) + "#" * min(6, len(m.group(2)) + levels), line
+            )
+    return result, opened_at if fence else None
 
 
 def dedup_markdown(

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- MCP `crawl` and `crawl_site` Markdown output: headings inside each page are shifted down one level (capped at `######`, code blocks untouched), so they no longer collide with the `# <url>` header of each page. The JSON `markdown` field is unchanged.
+
 ## [0.32.0] - 2026-10-15
 
 **Upgrade note:** existing SearXNG-only setups must set `SEARXNG_URL` explicitly; there is no `http://localhost:8888` default any more. `SEARXNG_URL` must not embed credentials (`https://user:pw@host` is rejected); use `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` instead.

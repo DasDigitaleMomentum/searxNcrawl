@@ -2,12 +2,13 @@
 
 ## Markdown
 
-When `output_format="markdown"`, pages are concatenated with URL headers and timestamps:
+When `output_format="markdown"`, pages are concatenated with URL headers and timestamps. Headings inside each page are shifted down one level (`#` becomes `##`, capped at `######`; code blocks are left as they are), so every `#` heading is a page header:
 
 ```markdown
 # https://example.com/page1
 _Crawled: 2025-01-09 12:00:00 UTC_
 
+## Page title
 [Page content as markdown...]
 
 ---

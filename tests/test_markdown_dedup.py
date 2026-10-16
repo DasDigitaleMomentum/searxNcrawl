@@ -4,7 +4,7 @@ from typing import Any
 from types import SimpleNamespace
 
 from crawler.builder import build_document_from_result
-from crawler.markdown_dedup import dedup_markdown, dedup_markdown_exact
+from crawler.markdown_dedup import demote_headings, dedup_markdown, dedup_markdown_exact
 
 
 def test_exact_dedup_removes_duplicate_sections_first_wins() -> None:
@@ -251,3 +251,42 @@ Closing paragraph."""
     assert doc.metadata["dedup_mode"] == "off"
     assert doc.metadata["dedup_sections_removed"] == 0
     assert doc.metadata["dedup_applied"] is False
+
+
+def test_demote_headings_shifts_levels_and_caps_at_six() -> None:
+    markdown = (
+        "# Title\n## Sub\n#### Deep\n###### Six\n#hashtag\nText # not a heading\n#"
+    )
+
+    assert demote_headings(markdown, 2) == (
+        "### Title\n#### Sub\n###### Deep\n###### Six\n#hashtag\n"
+        "Text # not a heading\n###"
+    )
+    assert demote_headings(markdown, 0) == markdown
+
+
+def test_demote_headings_skips_fenced_code() -> None:
+    markdown = (
+        "# Install\n"
+        "```bash\n# comment\n```\n"
+        "~~~\n# tilde comment\n```python\n# still code\n~~~\n"
+        "  ## Indented heading\n"
+        "    # indented code"
+    )
+
+    assert demote_headings(markdown, 1) == (
+        "## Install\n"
+        "```bash\n# comment\n```\n"
+        "~~~\n# tilde comment\n```python\n# still code\n~~~\n"
+        "  ### Indented heading\n"
+        "    # indented code"
+    )
+
+
+def test_demote_headings_reads_unclosed_fence_as_text() -> None:
+    # Crawl4AI can emit a fence that never closes; headings after it still count.
+    markdown = "# A\n```\n# code\n```\n## B\n```\nquote\n\n## C\n### D"
+
+    assert demote_headings(markdown, 1) == (
+        "## A\n```\n# code\n```\n### B\n```\nquote\n\n### C\n#### D"
+    )

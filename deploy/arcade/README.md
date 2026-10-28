@@ -54,6 +54,17 @@ Store `SEARXNCRAWL_SEARCH_CONFIG` as an Arcade secret containing a JSON object. 
 - Secret values belong in Arcade's secret store, not source files, tool arguments or deployment archives.
 - For a local STDIO check, supply the same secret through the process environment and run `uv run --locked python server.py`.
 
+## Connect an HTTP worker to Arcade
+
+- Set a strong `ARCADE_WORKER_SECRET` in the host environment. Keep the worker listener private; publish it only through a TLS proxy.
+- Run the container with `ARCADE_SERVER_TRANSPORT=http`, `ARCADE_SERVER_HOST=0.0.0.0`, `ARCADE_AUTH_DISABLED=false` and the worker secret. The default HTTP port is 8000.
+- Allow only `GET /worker/health`, `GET /worker/tools` and `POST /worker/tools/invoke` through the proxy. Return 404 for every other path, including `/mcp` and `/docs`. Health is public; catalog and invocation require a signed worker token.
+- Register an **Arcade** server using the proxy's HTTPS origin and the same worker secret. The tested Arcade Cloud settings are **timeout 60 seconds, retry 1**; its API rejects timeouts above 60 seconds. Keep each crawl workload within that transport limit.
+- Store the search configuration in Arcade's secret management; the Engine supplies it with each invocation.
+- Create an OAuth MCP gateway allowing only `Searxncrawl.Crawl`, `Searxncrawl.CrawlSite` and `Searxncrawl.Search`. Use a regular MCP OAuth client; a CLI login token is not accepted as a gateway OAuth token.
+- Verify gateway authentication, real provider searches, both crawl tools and `include_content` from an external MCP client. A healthy worker or successful Engine API call alone does not complete this check.
+- Temporary tunnels are for acceptance tests. Production requires a stable host, persistent HTTPS endpoint and monitoring; this repository does not provision those resources.
+
 ## Deployment archive
 
 - Stage only `server.py` and `pyproject.toml` in a separate directory. Exclude tests, credentials, plans and verification artifacts.

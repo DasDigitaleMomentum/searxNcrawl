@@ -2,7 +2,7 @@
 type: documentation
 entity: module
 module: "crawler-mcp-server"
-version: 1.1
+version: 1.2
 ---
 
 # Module: crawler-mcp-server
@@ -42,24 +42,26 @@ version: 1.1
 | Symbol | Kind | Visibility | Location | Purpose |
 |--------|------|------------|----------|---------|
 | `mcp` | const | public | `crawler/mcp_server.py:82` | FastMCP server instance and tool registry root. |
-| `OutputFormat` | enum | internal | `crawler/mcp_server.py:101` | Enum constraining crawl output formats (`markdown`/`json`). |
-| `_parse_csv_allowlist` | function | internal | `crawler/mcp_server.py:120` | Trims comma-separated HTTP allowlist entries, removes empty entries, preserves explicit wildcards, and returns no override for absent/effectively empty input. |
-| `_format_timestamp` | function | internal | `crawler/mcp_server.py:129` | Produces UTC timestamp string for output payloads. |
-| `_strip_markdown_links` | function | internal | `crawler/mcp_server.py:134` | Optional post-processing for removing link targets in output. |
-| `_doc_to_dict` | function | internal | `crawler/mcp_server.py:150` | Converts `CrawledDocument` to JSON-serializable structure. |
-| `_format_single_doc_markdown` | function | internal | `crawler/mcp_server.py:166` | Renders one crawl result section in markdown. |
-| `_format_multiple_docs_markdown` | function | internal | `crawler/mcp_server.py:182` | Joins multiple doc sections with separators. |
-| `_format_output` | function | internal | `crawler/mcp_server.py:194` | Central formatter for markdown/json outputs plus summary/stats. |
-| `crawl` | function | public | `crawler/mcp_server.py:233` | MCP tool for crawling one or more URLs. |
-| `crawl_site` | function | public | `crawler/mcp_server.py:318` | MCP tool for BFS site crawl from seed URL. |
-| `search` | function | public | `crawler/mcp_server.py:430` | MCP tool for multi-provider search (`providers` subset, `max_retries` per provider); returns the serialized envelope or `{"error", "query"}` JSON. |
-| `main` | function | public | `crawler/mcp_server.py:633` | Process entrypoint selecting stdio/http transport and conditionally wiring HTTP Host/Origin allowlists and CORS middleware. |
+| `OutputFormat` | enum | internal | `crawler/mcp_server.py:107` | Enum constraining crawl output formats (`markdown`/`json`). |
+| `_parse_csv_allowlist` | function | internal | `crawler/mcp_server.py:126` | Trims comma-separated HTTP allowlist entries, removes empty entries, preserves explicit wildcards, and returns no override for absent/effectively empty input. |
+| `_format_timestamp` | function | internal | `crawler/mcp_server.py:135` | Produces UTC timestamp string for output payloads. |
+| `_strip_markdown_links` | function | internal | `crawler/mcp_server.py:140` | Optional post-processing for removing link targets in output. |
+| `_doc_to_dict` | function | internal | `crawler/mcp_server.py:156` | Converts `CrawledDocument` to JSON-serializable structure. |
+| `_format_single_doc_markdown` | function | internal | `crawler/mcp_server.py:172` | Renders a URL heading and nests page headings one level lower, capped at h6; closed fenced code is preserved. |
+| `_format_multiple_docs_markdown` | function | internal | `crawler/mcp_server.py:188` | Joins multiple doc sections with separators. |
+| `_format_output` | function | internal | `crawler/mcp_server.py:200` | Central formatter for markdown/json outputs plus summary/stats. |
+| `crawl` | function | public | `crawler/mcp_server.py:239` | MCP tool for crawling one or more URLs. |
+| `crawl_site` | function | public | `crawler/mcp_server.py:324` | MCP tool for DFS site crawl from seed URL. |
+| `search` | function | public | `crawler/mcp_server.py:434` | Provider search with optional `include_content`; adds page Markdown or `crawl_error`, or returns `{"error", "query"}` for search failure. |
+| `main` | function | public | `crawler/mcp_server.py:540` | Process entrypoint selecting stdio/http transport and conditionally wiring HTTP Host/Origin allowlists and CORS middleware. |
 
 ## Data Flow
 
 1. MCP client invokes a tool via FastMCP transport.
 2. Tool validates/normalizes arguments (e.g., output format).
 3. Tool calls package crawl functions or `crawler.search_orchestrator.search`.
+   - Search resolves SearXNG extra headers and secret files per call; headers never reach You.com.
+   - `include_content=true` crawls result pages through `crawl_result_pages` before serialization.
 4. Results are transformed to markdown or JSON string payload.
 5. FastMCP returns payload to client over stdio/HTTP.
 
@@ -70,7 +72,8 @@ version: 1.1
   2. `~/.config/searxncrawl/.env` (user config directory)
   3. Auto-creates from `.env.example` if available
 - Env vars consumed:
-  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`. The startup log lists the configured providers without secrets.
+  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `SEARXNG_EXTRA_HEADERS`, `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`. The startup log lists configured providers without secrets.
+  - Extra-header names must be HTTP tokens and values ASCII strings without control characters. UTF-8 secret files require absolute or `~/` references. Invalid configuration disables only SearXNG with a value/path-free warning. [Header rules](../usage/installation.md#searxng-behind-cloudflare-access).
 - Runtime CLI args for server process:
   - `--transport` (`stdio`/`http`) (`crawler/mcp_server.py:664`)
   - `--host` and `--port` select the HTTP bind address and port; they do not trust an externally visible Host header (`crawler/mcp_server.py:670`, `crawler/mcp_server.py:675`).
@@ -87,6 +90,7 @@ version: 1.1
 - `exact` is the backward-compatible default and keeps dedup active for intra-document exact duplicates.
 - `off` disables dedup for that request only.
 - JSON output forwards builder metadata unchanged, including dedup stats and guardrail indicators when present (for example `dedup_guardrail_triggered`).
+- MCP crawl Markdown nests page headings one level below URL headings, capped at h6; JSON `markdown` values remain unchanged.
 
 ## Auth Surface (Phase 2 MVP)
 

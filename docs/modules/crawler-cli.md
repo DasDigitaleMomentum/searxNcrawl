@@ -2,7 +2,7 @@
 type: documentation
 entity: module
 module: "crawler-cli"
-version: 1.0
+version: 1.1
 ---
 
 # Module: crawler-cli
@@ -40,36 +40,38 @@ version: 1.0
 
 | Symbol | Kind | Visibility | Location | Purpose |
 |--------|------|------------|----------|---------|
-| `_setup_logging` | function | internal | `crawler/cli.py:68` | Standardized logging initialization with verbose toggle. |
-| `_strip_markdown_links` | function | internal | `crawler/cli.py:77` | Removes markdown links + bare URLs for cleaner output. |
-| `_format_search_markdown` | function | internal | `crawler/cli.py:49` | Converts the search envelope into a markdown summary with a `**Sources:**` line per result. |
-| `_doc_to_dict` | function | internal | `crawler/cli.py:138` | Serializes `CrawledDocument` for JSON output. |
-| `_references_to_list` | function | internal | `crawler/cli.py:154` | Serializes only `CrawledDocument.references` as a JSON array for `--links-only --json` output. |
-| `_format_references` | function | internal | `crawler/cli.py:162` | Renders references as `[N] label - href` lines for links-only markdown output. |
-| `_url_to_filename` | function | internal | `crawler/cli.py:172` | Creates deterministic/safe filename from URL for multi-doc outputs. |
-| `_write_output` | function | internal | `crawler/cli.py:182` | Handles stdout/file/dir output paths for crawl results, including links-only branching for single/multi document markdown and JSON modes. |
-| `_parse_crawl_args` | function | internal | `crawler/cli.py:309` | Defines crawl command arguments, including mutually exclusive `--remove-links` and `--links-only` output controls. |
-| `_run_crawl_async` | function | internal | `crawler/cli.py:419` | Executes crawl flow for single/multi/site modes and forwards `links_only`/format options into output materialization. |
-| `main` | function | public | `crawler/cli.py:498` | Entrypoint for `crawl` script. |
-| `_parse_capture_args` | function | internal | `crawler/cli.py` | Defines isolated session-capture CLI arguments. |
-| `_run_capture_async` | function | internal | `crawler/cli.py` | Executes isolated session-capture flow and maps success/timeout/abort to deterministic exit codes. |
-| `capture_main` | function | public | `crawler/cli.py` | Entrypoint for `crawl-capture` script. |
-| `_parse_search_args` | function | internal | `crawler/cli.py:733` | Defines search command options (incl. `--providers`) and examples. |
-| `_run_search_async` | function | internal | `crawler/cli.py:836` | Runs the orchestrator (single attempt per provider) and formats markdown/json output. |
-| `search_main` | function | public | `crawler/cli.py:883` | Entrypoint for `search` script. |
+| `_setup_logging` | function | internal | `crawler/cli.py:34` | Standardized logging initialization with verbose toggle. |
+| `_strip_markdown_links` | function | internal | `crawler/cli.py:43` | Removes markdown links + bare URLs for cleaner output. |
+| `_format_search_markdown` | function | internal | `crawler/cli.py:54` | Renders result headings, source attribution, optional page Markdown nested two heading levels lower and per-page crawl errors. |
+| `_doc_to_dict` | function | internal | `crawler/cli.py:102` | Serializes `CrawledDocument` for JSON output. |
+| `_references_to_list` | function | internal | `crawler/cli.py:118` | Serializes only `CrawledDocument.references` as a JSON array for `--links-only --json` output. |
+| `_format_references` | function | internal | `crawler/cli.py:126` | Renders references as `[N] label - href` lines for links-only markdown output. |
+| `_url_to_filename` | function | internal | `crawler/cli.py:136` | Creates deterministic/safe filename from URL for multi-doc outputs. |
+| `_write_output` | function | internal | `crawler/cli.py:146` | Handles stdout/file/dir output paths for crawl results, including links-only branching for single/multi document markdown and JSON modes. |
+| `_parse_crawl_args` | function | internal | `crawler/cli.py:273` | Defines crawl command arguments, including mutually exclusive `--remove-links` and `--links-only` output controls. |
+| `_run_crawl_async` | function | internal | `crawler/cli.py:383` | Executes crawl flow for single/multi/site modes and forwards `links_only`/format options into output materialization. |
+| `main` | function | public | `crawler/cli.py:462` | Entrypoint for `crawl` script. |
+| `_parse_capture_args` | function | internal | `crawler/cli.py:484` | Defines isolated session-capture CLI arguments. |
+| `_run_capture_async` | function | internal | `crawler/cli.py:641` | Executes isolated session-capture flow and maps success/timeout/abort to deterministic exit codes. |
+| `capture_main` | function | public | `crawler/cli.py:722` | Entrypoint for `crawl-capture` script. |
+| `_parse_search_args` | function | internal | `crawler/cli.py:744` | Defines search options, including `--providers` and `--include-content`, and examples. |
+| `_run_search_async` | function | internal | `crawler/cli.py:855` | Runs provider search, optional result-page crawling and shared JSON/Markdown serialization. |
+| `search_main` | function | public | `crawler/cli.py:903` | Entrypoint for `search` script. |
 
 ## Data Flow
 
 1. Module import invokes shared `crawler.env.load_config()` to establish env variables.
 2. Entrypoint parses args and sets logging.
-3. Crawl command dispatches to package crawl APIs; capture command dispatches to isolated session-capture runtime; search command calls `crawler.search_orchestrator.search` (SearXNG and/or You.com).
-4. Results are transformed and emitted to stdout/files with optional link stripping or links-only extraction.
-5. Exit code reflects success/failure conditions.
+3. Crawl dispatches to package APIs; capture uses isolated session capture; search resolves provider settings and validated SearXNG-only extra headers through `crawler.search_orchestrator.search`.
+4. `search --include-content` crawls result pages and adds `markdown` or `crawl_error` without discarding search results.
+5. Results are transformed and emitted to stdout/files with optional link stripping or links-only extraction.
+6. Exit code reflects success/failure conditions.
 
 ## Configuration
 
 - Environment variables read:
-  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`.
+  - Search providers, read at call time by `crawler.search_orchestrator`: `SEARXNG_URL` (no default), `SEARXNG_USERNAME`/`SEARXNG_PASSWORD` (both or neither), `SEARXNG_EXTRA_HEADERS`, `YDC_API_KEY`; plus `SEARCH_RESULT_FIELDS`.
+- Extra headers apply only to SearXNG. Invalid header configuration disables that provider before a request; a configured You.com provider remains available. Secret-file values are reread each call. [Header rules](../usage/installation.md#searxng-behind-cloudflare-access).
 - `.env` search order and auto-seeding behavior implemented in shared `crawler/env.py` (see [crawler-env](crawler-env.md)).
 - Crawl CLI exposes `--dedup-mode` with choices `exact|off` (default: `exact`).
 - Crawl CLI exposes `--storage-state <path>` to enable authenticated crawling via Playwright storage state JSON.
@@ -80,9 +82,10 @@ version: 1.0
 | Flag | Type | Default | Notes |
 |------|------|---------|-------|
 | `--json` | boolean | `False` | Emit JSON payloads instead of markdown. |
+| `--include-content` | boolean | `False` | Search only: add result-page Markdown or `crawl_error`; three pages at a time, 15 s per page. |
 | `--remove-links` | boolean | `False` | Strip markdown links from rendered markdown output. Mutually exclusive with `--links-only`. |
 | `--links-only` | boolean | `False` | Output only extracted references; markdown mode renders `[N] label - href`, JSON mode renders a references-only array. Mutually exclusive with `--remove-links`. |
-| `--site` | boolean | `False` | Enable BFS site crawl mode for a seed URL. |
+| `--site` | boolean | `False` | Enable DFS site crawl mode for a seed URL. |
 | `--max-depth` | integer | `2` | Site crawl depth limit. |
 | `--max-pages` | integer | `25` | Site crawl page limit. |
 | `--include-subdomains` | boolean | `False` | Include subdomains during site crawl. |

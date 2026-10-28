@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-28
+
 ### Added
 - `SEARXNG_EXTRA_HEADERS` for CLI/MCP search, including absolute or `~/` secret-file references. Invalid headers disable SearXNG without exposing values; You.com remains available.
 - Search with page content in one call: MCP `search(..., include_content=true)` and CLI `search --include-content` crawl every result page and add its Markdown as `markdown`, or `crawl_error` when a page fails. The search results are returned either way.
+- MCPB configuration for SearXNG basic auth, extra headers and result-field selection; the official MCP Registry marks extra-header configuration as secret.
+
+### Changed
+- Refresh the development lockfile: Crawl4AI 0.9.5, Playwright 1.64.1, FastMCP/FastMCP-slim 4.1.3, Authlib 1.9.1, Brotli 1.2.1 and Certifi 2026.10.23. Update pinned CI/publishing actions.
+- Refresh search configuration, CLI/MCP, bundle/registry documentation and the root README.
 
 ### Fixed
 - MCP `crawl` and `crawl_site` Markdown output: headings inside each page are shifted down one level (capped at `######`, code blocks untouched), so they no longer collide with the `# <url>` header of each page. The JSON `markdown` field is unchanged.

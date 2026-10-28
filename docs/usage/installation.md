@@ -105,7 +105,7 @@ Check it with `curl "http://localhost:8888/search?q=test&format=json"`. Which en
 | `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |
 | `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate,providers`    | Comma-separated result fields. Unset = all fields. Available: title, url, content, publishedDate, providers  |
 
-**SearXNG behind Cloudflare Access:**
+### SearXNG behind Cloudflare Access
 
 - Set extra headers for CLI and MCP search; they are never sent to You.com.
 - Header names must be HTTP tokens; values must be ASCII strings without control characters.

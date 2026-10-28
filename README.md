@@ -122,6 +122,7 @@ Your agent calls `search`, picks a result and calls `crawl`. It gets back clean 
 ```bash
 uvx --from searxncrawl crawl https://modelcontextprotocol.io/docs/getting-started/intro
 SEARXNG_URL=http://localhost:8888 uvx --from searxncrawl search "model context protocol" --max-results 5
+SEARXNG_URL=http://localhost:8888 uvx --from searxncrawl search "Python documentation" --max-results 3 --include-content
 ```
 
 ## How it works
@@ -151,6 +152,13 @@ searxNcrawl exposes three MCP tools:
 | `crawl_site` | Follows links from a seed URL within depth, page and timeout limits, tuned for documentation sites. |
 
 Both crawl tools drop sections that repeat within a page's Markdown (`dedup_mode="exact"`), can strip links for a smaller context (`remove_links`), and accept a Playwright `storage_state` for pages behind a login. Full parameters are in the [MCP tools reference](docs/usage/mcp-tools.md).
+
+### Private SearXNG instances
+
+- `SEARXNG_EXTRA_HEADERS` adds headers to SearXNG requests in both CLI and MCP, including access-gateway credentials and a custom User-Agent.
+- Values such as `@~/.config/searxncrawl/cf_secret` load secrets from files; absolute and `~/` paths are supported.
+- Invalid header configuration disables SearXNG with a value-free warning; a configured You.com provider remains available.
+- Setup and JSON examples: [SearXNG configuration](docs/usage/installation.md).
 
 ## Why searxNcrawl
 

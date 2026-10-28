@@ -146,7 +146,7 @@ searxNcrawl exposes three MCP tools:
 
 | Tool | What it does |
 | --- | --- |
-| `search` | Queries the configured providers (SearXNG, You.com) in parallel and returns one merged, deduplicated list with the source of each result. Filters: language, time range, safe search, paging; categories and engines for SearXNG. |
+| `search` | Queries the configured providers (SearXNG, You.com) in parallel and returns one merged, deduplicated list with the source of each result. Filters: language, time range, safe search, paging; categories and engines for SearXNG. With `include_content`, also returns the Markdown of each result page in the same call. |
 | `crawl` | Renders one or many URLs in Chromium and returns Markdown or JSON with metadata and references. |
 | `crawl_site` | Follows links from a seed URL within depth, page and timeout limits, tuned for documentation sites. |
 

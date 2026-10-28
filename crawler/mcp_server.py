@@ -44,9 +44,11 @@ from fastmcp import FastMCP
 from . import search_orchestrator
 from .document import CrawledDocument
 from .env import load_config
+from .markdown_dedup import demote_headings
 from .search_orchestrator import (
     SearchProviderError,
     configured_providers,
+    crawl_result_pages,
     serialize_search_results,
 )
 
@@ -91,7 +93,8 @@ mcp = FastMCP(
 
     2. Web Search Tool:
        - search: Search the web via the configured providers (SearXNG, You.com),
-         queried in parallel; results are merged and attributed per provider
+         queried in parallel; results are merged and attributed per provider.
+         include_content=true also returns the Markdown of each result page
 
     Output formats for crawl tools:
     - markdown: Clean concatenated markdown (default)
@@ -176,7 +179,7 @@ def _format_single_doc_markdown(doc: CrawledDocument) -> str:
     if doc.status == "failed":
         lines.append(f"**Error:** {doc.error_message}")
     else:
-        lines.append(doc.markdown)
+        lines.append(demote_headings(doc.markdown, 1))
 
     return "\n".join(lines)
 
@@ -438,6 +441,7 @@ async def search(
     max_results: int = 10,
     max_retries: int = 3,
     providers: Optional[List[str]] = None,
+    include_content: bool = False,
 ):
     """
     Search the web via the configured search providers (SearXNG, You.com).
@@ -458,10 +462,13 @@ async def search(
         max_retries: Maximum attempts per provider for transient request errors (default: 3)
         providers: Subset of configured providers to query ('searxng', 'youcom').
             Default: None (all configured providers)
+        include_content: Also crawl each result page and add its Markdown as
+            "markdown" (or "crawl_error" if the page fails). Default: false
 
     Returns:
         JSON string {query, number_of_results, results}. Each result has
-        title, url, content, publishedDate and providers.
+        title, url, content, publishedDate and providers, plus markdown or
+        crawl_error with include_content.
         SEARCH_RESULT_FIELDS (comma-separated) limits the fields per result;
         unset/empty returns all of them.
         If some providers fail, the results of the others are returned. If all
@@ -480,6 +487,9 @@ async def search(
 
         # Search in German
         search(query="Rezepte", language="de")
+
+        # Results together with the Markdown of each result page
+        search(query="crawl4ai release notes", max_results=3, include_content=True)
     """
     LOGGER.info("Searching for: %s", query)
     start = time.monotonic()
@@ -497,7 +507,8 @@ async def search(
             max_retries=max_retries,
             providers=providers,
         )
-        data = serialize_search_results(query, results)
+        documents = await crawl_result_pages(results) if include_content else None
+        data = serialize_search_results(query, results, documents)
 
         elapsed = time.monotonic() - start
         LOGGER.info(

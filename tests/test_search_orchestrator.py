@@ -10,7 +10,9 @@ from urllib.parse import urlsplit
 import httpx
 import pytest
 
+import crawler
 from crawler import cli, mcp_server
+from crawler.document import CrawledDocument
 from crawler import search_orchestrator as orchestrator
 from crawler.search_orchestrator import (
     SEARXNG,
@@ -1020,6 +1022,94 @@ async def test_cli_markdown_sources_and_providers_flag(
     monkeypatch.setenv("SEARCH_RESULT_FIELDS", "title,url")
     assert await cli._run_search_async(cli._parse_search_args(["q"])) == 0
     assert "**Sources:**" not in capsys.readouterr().out
+
+
+# --- Search with page content -------------------------------------------------
+
+
+def _mock_page_crawl(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Replace crawl_pages_async; pages under y.example fail. Records URL batches."""
+    batches: list[list[str]] = []
+
+    async def fake_crawl_pages_async(urls, **kwargs):
+        assert kwargs == {"timeout": 15}
+        batches.append(list(urls))
+        return [
+            CrawledDocument(u, u, "failed", "", error_message="Timeout after 15s")
+            if "y.example" in u
+            else CrawledDocument(u, u, "success", f"# page {u}")
+            for u in urls
+        ]
+
+    monkeypatch.setattr(crawler, "crawl_pages_async", fake_crawl_pages_async)
+    return batches
+
+
+async def test_mcp_include_content_adds_markdown_and_crawl_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_providers(monkeypatch)
+    batches = _mock_page_crawl(monkeypatch)
+    monkeypatch.delenv("SEARCH_RESULT_FIELDS", raising=False)
+
+    plain = json.loads(await mcp_server.search(query="q"))
+    assert batches == []
+    assert not any({"markdown", "crawl_error"} & set(item) for item in plain["results"])
+
+    payload = json.loads(await mcp_server.search(query="q", include_content=True))
+    urls = [item["url"] for item in payload["results"]]
+    assert batches == [urls]
+    for item in payload["results"]:
+        if "y.example" in item["url"]:
+            assert item["crawl_error"] == "Timeout after 15s"
+            assert "markdown" not in item
+        else:
+            assert item["markdown"] == f"# page {item['url']}"
+            assert "crawl_error" not in item
+
+    # SEARCH_RESULT_FIELDS may drop url; the pages are still crawled by URL.
+    monkeypatch.setenv("SEARCH_RESULT_FIELDS", "title")
+    payload = json.loads(await mcp_server.search(query="q", include_content=True))
+    assert batches[-1] == urls
+    assert payload["results"][0] == {"title": "Shared", "markdown": f"# page {urls[0]}"}
+
+
+async def test_include_content_skips_crawl_without_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_providers(monkeypatch, searxng=(), youcom=())
+    batches = _mock_page_crawl(monkeypatch)
+
+    payload = json.loads(await mcp_server.search(query="q", include_content=True))
+
+    assert payload["results"] == []
+    assert batches == []
+
+
+async def test_cli_include_content_markdown_and_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _mock_providers(monkeypatch)
+    batches = _mock_page_crawl(monkeypatch)
+    monkeypatch.delenv("SEARCH_RESULT_FIELDS", raising=False)
+
+    assert await cli._run_search_async(cli._parse_search_args(["q"])) == 0
+    assert batches == []
+    capsys.readouterr()
+
+    argv = ["q", "--include-content"]
+    assert await cli._run_search_async(cli._parse_search_args(argv)) == 0
+    out = capsys.readouterr().out
+    assert "content Shared\n\n### page https://shared.example/a\n\n---" in out
+    result_headings = [line for line in out.splitlines() if line.startswith("## ")]
+    assert result_headings == ["## 1. Shared", "## 2. Y only", "## 3. S only"]
+    assert "**Crawl error:** Timeout after 15s" in out
+
+    argv = ["q", "--include-content", "--json"]
+    assert await cli._run_search_async(cli._parse_search_args(argv)) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["results"][0]["markdown"] == "# page https://shared.example/a"
+    assert len(batches) == 2
 
 
 async def test_mcp_retries_provider_on_read_timeout(

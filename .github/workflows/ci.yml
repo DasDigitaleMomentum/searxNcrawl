@@ -93,6 +93,12 @@ jobs:
       - name: Check adapter tools and credential isolation
         run: uv run --locked --extra dev pytest -p no:cacheprovider
 
+      - name: Build Debian worker with Chromium
+        run: docker build --tag searxncrawl-arcade:test .
+
+      - name: Check container tools and browser rendering
+        run: docker run --rm -i --network none --entrypoint python searxncrawl-arcade:test - < tests/container_smoke.py
+
   ci:
     # Single required status check, enforced by the org ruleset
     # "public-default-branch". Add every job of this workflow to `needs`.

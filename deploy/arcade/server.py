@@ -58,6 +58,12 @@ async def search(
 ) -> str:
     """Search SearXNG and/or You.com, optionally crawling each result page."""
     env = provider_env(context.get_secret("SEARXNCRAWL_SEARCH_CONFIG"))
+    # MCP's default subprocess environment omits browser runtime settings.
+    env.update({
+        key: os.environ[key]
+        for key in ("PLAYWRIGHT_BROWSERS_PATH", "PLAYWRIGHT_AUTO_INSTALL")
+        if key in os.environ
+    })
     # Each process receives only this call's provider credentials.
     transport = StdioTransport(
         command=sys.executable,

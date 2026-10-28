@@ -62,6 +62,7 @@ Store `SEARXNCRAWL_SEARCH_CONFIG` as an Arcade secret containing a JSON object. 
 - Register an **Arcade** server using the proxy's HTTPS origin and the same worker secret. The tested Arcade Cloud settings are **timeout 60 seconds, retry 1**; its API rejects timeouts above 60 seconds. Keep each crawl workload within that transport limit.
 - Store the search configuration in Arcade's secret management; the Engine supplies it with each invocation.
 - Create an OAuth MCP gateway allowing only `Searxncrawl.Crawl`, `Searxncrawl.CrawlSite` and `Searxncrawl.Search`. Use a regular MCP OAuth client; a CLI login token is not accepted as a gateway OAuth token.
+- Append `?arcade_tools=false` to the client's gateway URL to expose exactly those three tools. Arcade otherwise adds its own app and capability-request tools by default; this is independent of the selected worker tools. See [Private Registry controls](https://docs.arcade.dev/en/operate/governance/private-registry#turn-capability-requests-on-or-off).
 - Verify gateway authentication, real provider searches, both crawl tools and `include_content` from an external MCP client. A healthy worker or successful Engine API call alone does not complete this check.
 - Temporary tunnels are for acceptance tests. Production requires a stable host, persistent HTTPS endpoint and monitoring; this repository does not provision those resources.
 

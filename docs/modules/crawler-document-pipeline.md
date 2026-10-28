@@ -2,7 +2,7 @@
 type: documentation
 entity: module
 module: "crawler-document-pipeline"
-version: 1.0
+version: 1.1
 ---
 
 # Module: crawler-document-pipeline
@@ -23,9 +23,9 @@ This module groups the internal data pipeline that turns raw Crawl4AI results in
 
 | Dependency | Type | Purpose |
 |-----------|------|---------|
-| `crawler-config` | module | Reuses markdown generator for fallback markdown production (`crawler/builder.py:10`). |
-| `crawl4ai.models` | library | Source result types (`CrawlResult`, `MarkdownGenerationResult`) (`crawler/builder.py:8`). |
-| Python `re` | library | Reference-line parsing from markdown blocks (`crawler/references.py:5`). |
+| `crawler-config` | module | Reuses markdown generator for fallback markdown production (`crawler/builder.py`). |
+| `crawl4ai.models` | library | Source result types (`CrawlResult`, `MarkdownGenerationResult`) (`crawler/builder.py`). |
+| Python `re` | library | Reference-line parsing from markdown blocks (`crawler/references.py`). |
 
 ## Structure
 
@@ -34,23 +34,29 @@ This module groups the internal data pipeline that turns raw Crawl4AI results in
 | `crawler/document.py` | file | Dataclasses for normalized crawl output (`Reference`, `CrawledDocument`). |
 | `crawler/references.py` | file | Reference parsing and fallback generation helpers. |
 | `crawler/builder.py` | file | Core conversion logic from Crawl4AI results to internal docs. |
+| `crawler/markdown_dedup.py` | file | Per-document section deduplication and fence-aware ATX heading demotion. |
 
 ## Key Symbols
 
 | Symbol | Kind | Visibility | Location | Purpose |
 |--------|------|------------|----------|---------|
-| `Reference` | class | public | `crawler/document.py:10` | Outgoing link representation with index/href/label. |
-| `CrawledDocument` | class | public | `crawler/document.py:19` | Canonical crawl result container used across APIs, CLI, MCP. |
-| `REFERENCE_LINE` | const | internal | `crawler/references.py:10` | Regex for parsing numbered reference markdown lines. |
-| `parse_references` | function | public | `crawler/references.py:13` | Parses references from markdown, falling back to internal/external link metadata. |
-| `_parse_markdown_block` | function | internal | `crawler/references.py:24` | Emits `Reference` objects parsed from markdown lines. |
-| `_build_from_links` | function | internal | `crawler/references.py:40` | Builds deduplicated references from link buckets when markdown references are unavailable. |
-| `_split_reference_tail` | function | internal | `crawler/references.py:58` | Splits reference tail into href and label. |
-| `build_document_from_result` | function | public | `crawler/builder.py:15` | Main transformation pipeline for success/failure mapping and metadata shaping. |
-| `_prepare_metadata` | function | internal | `crawler/builder.py:75` | Normalizes URL/title fields and records markdown lengths. |
-| `_derive_failure_reason` | function | internal | `crawler/builder.py:101` | Builds user-visible failure reason from result fields/metadata/status. |
-| `_ensure_markdown` | function | internal | `crawler/builder.py:116` | Ensures markdown is available by re-generating from HTML when needed. |
-| `_extract_requested_url` | function | internal | `crawler/builder.py:154` | Resolves original request URL from metadata fallbacks. |
+| `Reference` | class | public | `crawler/document.py` | Outgoing link representation with index/href/label. |
+| `CrawledDocument` | class | public | `crawler/document.py` | Canonical crawl result container used across APIs, CLI, MCP. |
+| `REFERENCE_LINE` | const | internal | `crawler/references.py` | Regex for parsing numbered reference markdown lines. |
+| `parse_references` | function | public | `crawler/references.py` | Parses references from markdown, falling back to internal/external link metadata. |
+| `_parse_markdown_block` | function | internal | `crawler/references.py` | Emits `Reference` objects parsed from markdown lines. |
+| `_build_from_links` | function | internal | `crawler/references.py` | Builds deduplicated references from link buckets when markdown references are unavailable. |
+| `_split_reference_tail` | function | internal | `crawler/references.py` | Splits reference tail into href and label. |
+| `build_document_from_result` | function | public | `crawler/builder.py` | Main transformation pipeline for success/failure mapping and metadata shaping. |
+| `_prepare_metadata` | function | internal | `crawler/builder.py` | Normalizes URL/title fields and records markdown lengths. |
+| `_derive_failure_reason` | function | internal | `crawler/builder.py` | Builds user-visible failure reason from result fields/metadata/status. |
+| `_ensure_markdown` | function | internal | `crawler/builder.py` | Ensures markdown is available by re-generating from HTML when needed. |
+| `_extract_requested_url` | function | internal | `crawler/builder.py` | Resolves original request URL from metadata fallbacks. |
+| `_apply_dedup_guardrails` | function | internal | `crawler/builder.py` | Adds metadata and warnings for high removal rates; does not restore removed sections. |
+| `DedupMode` | type | public | `crawler/markdown_dedup.py` | Literal modes `exact` and `off`. |
+| `dedup_markdown`, `dedup_markdown_exact` | functions | public | `crawler/markdown_dedup.py` | Normalize line endings and remove repeated normalized sections in exact mode. |
+| `demote_headings`, `_demote_lines` | functions | public/internal | `crawler/markdown_dedup.py` | Shift ATX headings outside closed fences; treat unclosed fences as text. |
+| `_split_sections`, `_normalize_line_endings`, `_normalize_section`, `_fingerprint_section` | functions | internal | `crawler/markdown_dedup.py` | Split and normalize sections; SHA-256 fingerprints keep the first occurrence. |
 
 ## Data Flow
 
@@ -59,7 +65,8 @@ This module groups the internal data pipeline that turns raw Crawl4AI results in
 3. Failed results return immediately as `CrawledDocument(status="failed")` with reason.
 4. Successful results ensure markdown availability and select best content variant (`fit_markdown` → citations → raw).
 5. References are parsed from markdown or reconstructed from link metadata.
-6. Completed `CrawledDocument` is returned to API/CLI/MCP layers.
+6. Selected Markdown is deduplicated per document; references and `raw_markdown` retain their separate source data.
+7. Completed `CrawledDocument` is returned to API/CLI/MCP layers.
 
 ## Configuration
 
@@ -70,12 +77,13 @@ This module groups the internal data pipeline that turns raw Crawl4AI results in
 ## Dedup + Guardrail Semantics
 
 - Dedup is applied per-document in `build_document_from_result` and does not perform any cross-document dedup.
-- Default mode remains `exact` (backward compatible); `off` keeps markdown unchanged.
+- Default mode is `exact`; `off` preserves section content while normalizing CRLF/CR line endings to LF.
+- Exact mode splits at blank lines and ATX headings, trims trailing whitespace and keeps the first normalized section. It is not semantic deduplication and does not protect fenced-code sections from section matching.
 - Builder metadata includes dedup metrics (`dedup_sections_total`, `dedup_sections_removed`, `dedup_chars_removed`, `dedup_mode`).
-- Phase-2 rollout guardrails are conservative and non-destructive: they only annotate metadata and emit warnings for suspiciously high section-removal rates in active dedup mode.
+- Guardrails annotate metadata and warn when at least 2 of at least 4 sections are removed at a rate of 45% or more; they do not reverse deduplication.
 - Guardrails are mode-aware: removal-rate warnings are not emitted when dedup mode is `off`.
 
 ## Inventory Notes
 
-- **Coverage**: full
-- **Notes**: Exhaustive for files in the pipeline cluster (`document.py`, `references.py`, `builder.py`).
+- **Coverage**: best-effort
+- **Notes**: Types and processing functions in `document.py`, `references.py`, `builder.py` and `markdown_dedup.py`; private regex/logging constants are omitted.

@@ -2,7 +2,7 @@
 type: documentation
 entity: module
 module: "crawler-cli"
-version: 1.1
+version: 1.2
 ---
 
 # Module: crawler-cli
@@ -25,38 +25,41 @@ version: 1.1
 | Dependency | Type | Purpose |
 |-----------|------|---------|
 | `crawler-env` | module | Shared `.env` config loading with CWD → user-config fallback (`crawler/env.py`). |
-| `crawler-package-api` | module | Uses async crawl functions for single/multi/site crawl execution (`crawler/cli.py:421`). |
-| `crawler-document-pipeline` | module | Uses `CrawledDocument` for type-safe output transforms (`crawler/cli.py:65`). |
-| `crawler.search_orchestrator` | module | Multi-provider search and result serializer for the `search` command (`crawler/cli.py:18`, `crawler/cli.py:20`). |
-| `argparse` | library | Defines command interfaces and help text (`crawler/cli.py:5`). |
+| `crawler-package-api` | module | Uses async crawl functions for single/multi/site crawl execution (`crawler/cli.py`). |
+| `crawler-document-pipeline` | module | Uses `CrawledDocument` for type-safe output transforms (`crawler/cli.py`). |
+| `crawler.search_orchestrator` | module | Multi-provider search and result serializer for the `search` command (`crawler/cli.py`). |
+| `argparse` | library | Defines command interfaces and help text (`crawler/cli.py`). |
 
 ## Structure
 
 | Path | Type | Purpose |
 |------|------|---------|
 | `crawler/cli.py` | file | Full CLI implementation for crawl/capture/search commands and output handling. |
+| `crawler/setup.py` | file | Coding-agent discovery, registration/removal, config backups and confirmation. |
 
 ## Key Symbols
 
 | Symbol | Kind | Visibility | Location | Purpose |
 |--------|------|------------|----------|---------|
-| `_setup_logging` | function | internal | `crawler/cli.py:34` | Standardized logging initialization with verbose toggle. |
-| `_strip_markdown_links` | function | internal | `crawler/cli.py:43` | Removes markdown links + bare URLs for cleaner output. |
-| `_format_search_markdown` | function | internal | `crawler/cli.py:54` | Renders result headings, source attribution, optional page Markdown nested two heading levels lower and per-page crawl errors. |
-| `_doc_to_dict` | function | internal | `crawler/cli.py:102` | Serializes `CrawledDocument` for JSON output. |
-| `_references_to_list` | function | internal | `crawler/cli.py:118` | Serializes only `CrawledDocument.references` as a JSON array for `--links-only --json` output. |
-| `_format_references` | function | internal | `crawler/cli.py:126` | Renders references as `[N] label - href` lines for links-only markdown output. |
-| `_url_to_filename` | function | internal | `crawler/cli.py:136` | Creates deterministic/safe filename from URL for multi-doc outputs. |
-| `_write_output` | function | internal | `crawler/cli.py:146` | Handles stdout/file/dir output paths for crawl results, including links-only branching for single/multi document markdown and JSON modes. |
-| `_parse_crawl_args` | function | internal | `crawler/cli.py:273` | Defines crawl command arguments, including mutually exclusive `--remove-links` and `--links-only` output controls. |
-| `_run_crawl_async` | function | internal | `crawler/cli.py:383` | Executes crawl flow for single/multi/site modes and forwards `links_only`/format options into output materialization. |
-| `main` | function | public | `crawler/cli.py:462` | Entrypoint for `crawl` script. |
-| `_parse_capture_args` | function | internal | `crawler/cli.py:484` | Defines isolated session-capture CLI arguments. |
-| `_run_capture_async` | function | internal | `crawler/cli.py:641` | Executes isolated session-capture flow and maps success/timeout/abort to deterministic exit codes. |
-| `capture_main` | function | public | `crawler/cli.py:722` | Entrypoint for `crawl-capture` script. |
-| `_parse_search_args` | function | internal | `crawler/cli.py:744` | Defines search options, including `--providers` and `--include-content`, and examples. |
-| `_run_search_async` | function | internal | `crawler/cli.py:855` | Runs provider search, optional result-page crawling and shared JSON/Markdown serialization. |
-| `search_main` | function | public | `crawler/cli.py:903` | Entrypoint for `search` script. |
+| `_setup_logging` | function | internal | `crawler/cli.py` | Standardized logging initialization with verbose toggle. |
+| `_strip_markdown_links` | function | internal | `crawler/cli.py` | Removes markdown links + bare URLs for cleaner output. |
+| `_format_search_markdown` | function | internal | `crawler/cli.py` | Renders result headings, source attribution, optional page Markdown nested two heading levels lower and per-page crawl errors. |
+| `_doc_to_dict` | function | internal | `crawler/cli.py` | Serializes `CrawledDocument` for JSON output. |
+| `_references_to_list` | function | internal | `crawler/cli.py` | Serializes only `CrawledDocument.references` as a JSON array for `--links-only --json` output. |
+| `_format_references` | function | internal | `crawler/cli.py` | Renders references as `[N] label - href` lines for links-only markdown output. |
+| `_url_to_filename` | function | internal | `crawler/cli.py` | Creates deterministic/safe filename from URL for multi-doc outputs. |
+| `_write_output` | function | internal | `crawler/cli.py` | Handles stdout/file/dir output paths for crawl results, including links-only branching for single/multi document markdown and JSON modes. |
+| `_parse_crawl_args` | function | internal | `crawler/cli.py` | Defines crawl command arguments, including mutually exclusive `--remove-links` and `--links-only` output controls. |
+| `_run_crawl_async` | function | internal | `crawler/cli.py` | Executes crawl flow for single/multi/site modes and forwards `links_only`/format options into output materialization. |
+| `main` | function | public | `crawler/cli.py` | Entrypoint for `crawl` script. |
+| `_parse_capture_args` | function | internal | `crawler/cli.py` | Defines isolated session-capture CLI arguments. |
+| `_format_cdp_session`, `_print_cdp_sessions`, `_select_cdp_session_interactive`, `_resolve_cdp_session_index` | functions | internal | `crawler/cli.py` | Format discovered CDP sessions and select a validated session index. |
+| `_run_capture_async` | function | internal | `crawler/cli.py` | Executes isolated session-capture flow and maps success/timeout/abort to deterministic exit codes. |
+| `capture_main` | function | public | `crawler/cli.py` | Entrypoint for `crawl-capture` script. |
+| `_parse_search_args` | function | internal | `crawler/cli.py` | Defines search options, including `--providers` and `--include-content`, and examples. |
+| `_run_search_async` | function | internal | `crawler/cli.py` | Runs provider search, optional result-page crawling and shared JSON/Markdown serialization. |
+| `search_main` | function | public | `crawler/cli.py` | Entrypoint for `search` script. |
+| `Agent`, `detect_agents`, `cli_commands`, `json_change`, `backup`, `main` | type/functions | public | `crawler/setup.py` | Native STDIO registration via agent CLIs or JSON config; preserve backups and refuse unsafe JSON rewrites. |
 
 ## Data Flow
 
@@ -76,7 +79,7 @@ version: 1.1
 - Crawl CLI exposes `--dedup-mode` with choices `exact|off` (default: `exact`).
 - Crawl CLI exposes `--storage-state <path>` to enable authenticated crawling via Playwright storage state JSON.
 - `--dedup-mode exact` preserves backward-compatible default behavior and enables intra-document exact dedup in the document pipeline.
-- `--dedup-mode off` disables markdown dedup for a crawl request without changing other pipeline behavior.
+- `--dedup-mode off` disables section removal for a crawl request; line endings still normalize to LF.
 - CLI flags include crawl mode, output mode, and auth controls:
 
 | Flag | Type | Default | Notes |
@@ -93,17 +96,17 @@ version: 1.1
 | `--storage-state` | path | `None` | Playwright `storage_state` JSON path for authenticated crawling. |
 | `--dedup-mode` | enum (`exact\|off`) | `exact` | Enables/disables per-document markdown dedup. |
 
-## Auth Surface (Phase 2 MVP)
+## Auth Surface
 
 - Auth is a thin surface pass-through: CLI forwards `--storage-state` to package API `auth={"storage_state": ...}`.
 - Validation and error semantics are owned by shared auth resolver code in package/core (no CLI-specific auth validation fork).
-- Scope boundary: session-capture/login automation is intentionally out of scope in this phase.
-- No-drift invariant: this surface work does not modify `crawler/config.py` defaults (wait/selectors/SPA/session behavior).
+- Session capture is provided by the separate `crawl-capture` command; the crawl command consumes an existing state file.
+- Capture supports isolated login and selected-context export from a running CDP browser; [usage](../usage/session-capture.md).
 
-## Session Capture Surface (Phase 3)
+## Session Capture Surface
 
 - `crawl-capture` is a dedicated command, isolated from `crawl` runtime paths.
-- Capture requires explicit completion signal via `--completion-url` regex and writes `storage_state` to `--output`.
+- Isolated capture requires a `--completion-url` regex; CDP mode selects an existing context. Both write `storage_state` to `--output`.
 - Deterministic outcomes:
   - success → exit `0`
   - timeout → exit `2`
@@ -112,20 +115,22 @@ version: 1.1
 
 ## Inventory Notes
 
-- **Coverage**: full
-- **Notes**: Covers the complete CLI module, including command families (`crawl`, `crawl-capture`, `search`) and `--links-only` output handling.
+- **Coverage**: best-effort
+- **Notes**: CLI command functions and setup registration entrypoints; private setup helpers are omitted.
+- `searxncrawl setup` detects Claude Code, Codex, Gemini CLI, Cursor, VS Code and Claude Desktop. Each change is shown and confirmed unless `--yes` is supplied.
+- Setup stores only `SEARXNG_URL` and `YDC_API_KEY`; the key is masked in setup output but stored as plaintext in agent configs. Other native configuration remains available through shared `.env` loading.
 
 ### Test Inventory (CLI links-only)
 
-- `tests/test_cli.py:74` — `test_parse_crawl_args_accepts_links_only`
-- `tests/test_cli.py:79` — `test_parse_crawl_args_rejects_links_only_with_remove_links`
-- `tests/test_cli.py:84` — `test_parse_crawl_args_help_includes_links_only`
-- `tests/test_cli.py:228` — `test_write_output_links_only_single_doc_markdown_stdout`
-- `tests/test_cli.py:242` — `test_write_output_links_only_single_doc_markdown_file`
-- `tests/test_cli.py:251` — `test_write_output_links_only_single_doc_json_stdout`
-- `tests/test_cli.py:262` — `test_write_output_links_only_multi_doc_markdown_stdout_with_headers`
-- `tests/test_cli.py:279` — `test_write_output_links_only_multi_doc_markdown_to_single_file`
-- `tests/test_cli.py:295` — `test_write_output_links_only_multi_doc_markdown_to_directory`
-- `tests/test_cli.py:314` — `test_run_crawl_async_site_links_only_mode_supported`
-- `tests/test_cli.py:366` — `test_write_output_links_only_zero_references_markdown_message`
-- `tests/test_cli.py:379` — `test_write_output_links_only_zero_references_json_empty_array`
+- `tests/test_cli.py` — `test_parse_crawl_args_accepts_links_only`
+- `tests/test_cli.py` — `test_parse_crawl_args_rejects_links_only_with_remove_links`
+- `tests/test_cli.py` — `test_parse_crawl_args_help_includes_links_only`
+- `tests/test_cli.py` — `test_write_output_links_only_single_doc_markdown_stdout`
+- `tests/test_cli.py` — `test_write_output_links_only_single_doc_markdown_file`
+- `tests/test_cli.py` — `test_write_output_links_only_single_doc_json_stdout`
+- `tests/test_cli.py` — `test_write_output_links_only_multi_doc_markdown_stdout_with_headers`
+- `tests/test_cli.py` — `test_write_output_links_only_multi_doc_markdown_to_single_file`
+- `tests/test_cli.py` — `test_write_output_links_only_multi_doc_markdown_to_directory`
+- `tests/test_cli.py` — `test_run_crawl_async_site_links_only_mode_supported`
+- `tests/test_cli.py` — `test_write_output_links_only_zero_references_markdown_message`
+- `tests/test_cli.py` — `test_write_output_links_only_zero_references_json_empty_array`

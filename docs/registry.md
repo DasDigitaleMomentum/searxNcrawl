@@ -1,6 +1,7 @@
 # MCP Registry
 
-searxNcrawl is described for the [official MCP Registry](https://registry.modelcontextprotocol.io/) by [`server.json`](../server.json) in the repository root:
+- [`server.json`](../server.json) describes searxNcrawl for the [official MCP Registry](https://registry.modelcontextprotocol.io/).
+- Public snapshot verified **28 October 2026**: PyPI and MCP Registry package version **0.33.0**. Recheck the public endpoints after each release.
 
 | Field | Value |
 | --- | --- |
@@ -39,7 +40,7 @@ curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.DasDi
 - Move released changelog entries out of `Unreleased`.
 - Keep registry and bundle environment mappings aligned with the released code. Extra headers can contain credentials and must be marked secret/sensitive.
 
-`server.json` describes the latest PyPI release, so its environment variables follow that release.
+`server.json` describes the published package release; keep its version and environment variables aligned when releasing.
 
 ## MCPB bundle
 
@@ -58,7 +59,7 @@ The release workflow fails if `mcpb/manifest.json` or the pin in `mcpb/pyproject
 
 ## Glama releases
 
-- [Public listing](https://glama.ai/mcp/servers/DasDigitaleMomentum/searxNcrawl): latest Glama build **0.33.1**; Python package **0.33.0**. Both were published **28 October 2026**; automatic releases are enabled.
+- Snapshot verified **28 October 2026**: [public listing](https://glama.ai/mcp/servers/DasDigitaleMomentum/searxNcrawl) build **0.33.1**, package **0.33.0**, GitHub `main` source `e8cc4d6`; automatic releases enabled.
 - Glama build numbers and Python package releases are independent; do not change package release metadata to match a Glama build number.
 - The listing builds the repository source; verify the selected commit and package version after each sync. A documentation-only main update can retain the same runtime release.
 
@@ -86,6 +87,8 @@ The release workflow fails if `mcpb/manifest.json` or the pin in `mcpb/pyproject
 
 ## Smithery transition
 
+- Status checked **28 October 2026**. Recheck the official notice before relying on the directory after shutdown.
+
 - Smithery's [official transition notice](https://www.smithery.ai/future) schedules API, account/API key, CLI/SDK and proxy shutdown for **31 October 2026**.
 - The public directory remains curated, with direct vendor MCP URLs.
 - CLI `4.11.1` publishing currently returns HTTP `403`, `Updating servers has been removed`.
@@ -104,3 +107,8 @@ uvx searxncrawl==0.33.0
 ```bash
 uv run mcpb/smithery_bundle.py searxncrawl-0.33.0-smithery.mcpb
 ```
+
+## PulseMCP submissions
+
+- Snapshot checked **28 October 2026**: new submissions and listing changes are paused.
+- Recheck [PulseMCP submission status](https://www.pulsemcp.com/submit) before attempting a submission; listing availability is separate from package/Registry publication.

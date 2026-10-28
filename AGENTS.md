@@ -46,7 +46,7 @@ uv run python -m crawler.mcp_server         # MCP server over STDIO
 - **Changelog.** Add user-visible changes under `## [Unreleased]` in `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)).
 - **Commits and PRs.** English, [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:` …). PRs are squash-merged into `main` and need one approval.
 - **Docs follow code.** When a tool parameter, default or environment variable changes, update `docs/usage/` and, if affected, the README.
-- **No invented claims.** README and docs describe only what is merged. Mark planned work as planned.
+- **Document implemented behavior.** README and docs describe merged behavior. Keep plans, design proposals, handovers, verification reports and scratch artifacts off `main`.
 - **Default integration.** Standard installations connect directly to the native MCP server over STDIO or HTTP. Arcade is optional and is not a runtime or release prerequisite.
 
 ## Releases

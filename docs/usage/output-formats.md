@@ -1,8 +1,12 @@
 # Output Formats
 
+<!-- Updated: 2026-10-28 -->
+
 ## Markdown
 
-When `output_format="markdown"`, pages are concatenated with URL headers and timestamps. Headings inside each page are shifted down one level (`#` becomes `##`, capped at `######`; code blocks are left as they are), so every `#` heading is a page header:
+- MCP crawl tools with `output_format="markdown"` concatenate pages with URL headers and timestamps.
+- Page headings shift down one level (`#` becomes `##`, capped at `######`); closed fenced code blocks stay unchanged.
+- CLI Markdown prints one page's content directly or writes one file per page, without MCP URL headers or timestamps.
 
 ```markdown
 # https://example.com/page1
@@ -21,7 +25,11 @@ _Crawled: 2025-01-09 12:00:01 UTC_
 
 ## JSON
 
-When `output_format="json"`, results include metadata, dedup metrics, guardrail signals, and extracted references:
+- MCP crawl tools with `output_format="json"` return the envelope below; `stats` is included for `crawl_site` only.
+- In content mode, CLI `crawl --json` returns a single document object for one page, or a document array in `crawl_results.json` for multiple pages. It does not add the MCP envelope.
+- Search output uses a separate envelope; see [search responses](mcp-tools.md#response-json).
+
+MCP site-crawl example:
 
 ```json
 {
@@ -45,7 +53,7 @@ When `output_format="json"`, results include metadata, dedup metrics, guardrail 
         "dedup_guardrail_triggered": false,
         "dedup_guardrail_reason": "within-threshold",
         "dedup_guardrail_section_removal_rate": 0.25,
-        "dedup_guardrail_section_rate_threshold": 0.6
+        "dedup_guardrail_section_rate_threshold": 0.45
       },
       "references": [
         {"index": 1, "href": "https://example.com/about", "label": "About"}
@@ -64,6 +72,9 @@ When `output_format="json"`, results include metadata, dedup metrics, guardrail 
   }
 }
 ```
+
+- Deduplication is per document; `exact` keeps the first normalized section, and `off` disables removal.
+- Guardrails report warnings and metadata; they do not restore removed content. A warning triggers at ≥45% removed sections when there are at least four sections and at least two removals.
 
 ## CrawledDocument
 

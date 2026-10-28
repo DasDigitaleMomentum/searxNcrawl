@@ -2,7 +2,7 @@
 type: documentation
 entity: feature
 feature: "crawling-workflows"
-version: 1.0
+version: 1.1
 ---
 
 # Feature: crawling-workflows
@@ -42,15 +42,20 @@ This feature provides single-page and multi-page web crawling that returns norma
 
 ## Configuration
 
-- CLI options: `--concurrency`, `--json`, `--remove-links` (`crawler/cli.py:288`, `crawler/cli.py:294`, `crawler/cli.py:300`).
-- MCP tool arguments: `concurrency`, `output_format`, `remove_links` (`crawler/mcp_server.py:191`, `crawler/mcp_server.py:190`, `crawler/mcp_server.py:192`).
-- Runtime crawl behavior comes from config defaults in `crawler/config.py:157`.
+- CLI options: `--concurrency`, `--json`, `--remove-links` (`crawler/cli.py`).
+- MCP tool arguments: `concurrency`, `output_format`, `remove_links` (`crawler/mcp_server.py`).
+- Runtime crawl behavior comes from `build_markdown_run_config` in `crawler/config.py`.
+- Async Python APIs accept `timeout` (default 30 s per URL); MCP `crawl` defaults to 15 s. CLI and sync Python wrappers use the core default.
+- CLI and MCP expose `dedup_mode` / `--dedup-mode` (`exact` default, `off` disables section removal), plus `storage_state` / `--storage-state` for existing authentication state.
+- `--links-only` is a crawl CLI output option; it is mutually exclusive with `--remove-links`.
 
 ## Edge Cases & Limitations
 
-- Batch crawl captures per-URL failures as failed documents instead of raising global exceptions (`crawler/__init__.py:152`-`crawler/__init__.py:160`).
-- Single-page crawl raises `ValueError` when crawler returns empty results (`crawler/__init__.py:113`).
-- Link stripping is regex-based and may remove URL-like text aggressively in some markdown contexts (`crawler/cli.py:77`, `crawler/mcp_server.py:90`).
+- Batch crawl captures per-URL failures as failed documents instead of raising global exceptions (`crawler/__init__.py`).
+- Single-page crawl raises `ValueError` when crawler returns empty results (`crawler/__init__.py`).
+- Default configs reload HTTP(S) pages once before readiness checks; custom non-empty `js_code` overrides disable that hook.
+- Deduplication uses normalized sections within each document, not across pages; guardrails warn without restoring removed content.
+- Link stripping is regex-based and may remove URL-like text aggressively in some markdown contexts (`crawler/cli.py`, `crawler/mcp_server.py`).
 
 ## Related Features
 

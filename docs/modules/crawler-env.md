@@ -2,7 +2,7 @@
 type: documentation
 entity: module
 module: "crawler-env"
-version: 1.0
+version: 1.1
 ---
 
 # Module: crawler-env
@@ -35,9 +35,9 @@ version: 1.0
 
 | Symbol | Kind | Visibility | Location | Purpose |
 |--------|------|------------|----------|---------|
-| `CONFIG_DIR` | const | public | `crawler/env.py:24` | Path to `~/.config/searxncrawl/`. |
-| `CONFIG_ENV_FILE` | const | public | `crawler/env.py:25` | Path to `~/.config/searxncrawl/.env`. |
-| `load_config` | function | public | `crawler/env.py:28` | Load `.env` with CWD-first, config-dir fallback, auto-create from `.env.example`. |
+| `CONFIG_DIR` | const | public | `crawler/env.py` | Path to `~/.config/searxncrawl/`. |
+| `CONFIG_ENV_FILE` | const | public | `crawler/env.py` | Path to `~/.config/searxncrawl/.env`. |
+| `load_config` | function | public | `crawler/env.py` | Load `.env` with CWD-first, config-dir fallback, auto-create from `.env.example`. |
 
 ## Data Flow
 
@@ -45,7 +45,8 @@ version: 1.0
 2. Function checks CWD for `.env` → loads if found.
 3. Falls back to `~/.config/searxncrawl/.env` → loads if found.
 4. If neither exists, copies `.env.example` from package root to config dir and loads it.
-5. Environment variables (`SEARXNG_URL`, `YDC_API_KEY`, etc.) are now available via `os.getenv()`. When `.env.example` was copied, the log asks the user to set `SEARXNG_URL` and/or `YDC_API_KEY`.
+5. Existing process environment values take precedence (`load_dotenv` uses `override=False`); the first existing file is selected without merging the user file.
+6. Environment variables (`SEARXNG_URL`, `YDC_API_KEY`, etc.) are now available via `os.getenv()`. When `.env.example` was copied, the log asks the user to set `SEARXNG_URL` and/or `YDC_API_KEY`.
 
 ## Configuration
 
@@ -53,6 +54,7 @@ version: 1.0
   1. `./.env` (current working directory)
   2. `~/.config/searxncrawl/.env`
   3. Auto-copy from `.env.example` when available
+- No template means no file is created; copy failures are ignored and existing process variables remain available.
 
 ## Consumers
 

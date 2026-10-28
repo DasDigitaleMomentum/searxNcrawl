@@ -1,6 +1,10 @@
 # Session Capture (`crawl-capture`)
 
-`crawl-capture` produces a Playwright `storage_state` file for authenticated crawling. Two methods are supported.
+<!-- Updated: 2026-10-28 -->
+
+- `crawl-capture` produces a Playwright `storage_state` file for authenticated crawling. Two methods are supported.
+- Manual capture defaults: a visible browser and a 300 s timeout; change with `--headless` and `--timeout`.
+- `--completion-url` is a regular expression and cannot be combined with CDP export.
 
 ## Option A — Manual login flow (built-in browser)
 
@@ -71,12 +75,13 @@ crawl https://example.com/private --storage-state ./state.json
 
 | Code | Meaning                                                             |
 | ---- | ------------------------------------------------------------------- |
-| `0`  | Success — storage state written                                     |
-| `2`  | Timeout — completion condition not reached in time (manual flow only) |
-| `130` | Abort — browser/session closed before completion (manual flow only) |
+| `0`  | Success — storage state written or sessions listed                                     |
+| `1`  | Configuration failure, export failure or another runtime error            |
+| `2`  | Manual capture timeout or CLI argument parsing error |
+| `130` | Manual browser/session closed or keyboard interruption |
 
 ## Safety notes
 
-- Keep `storage_state` files out of version control (add to `.gitignore`)
+- Treat `storage_state` as a credential file; keep it out of version control (add to `.gitignore`)
 - Capture/export is isolated from standard `crawl` / `crawl_site` paths
 - Multiple tabs sharing one browser context/profile share the same exported session state

@@ -1,5 +1,7 @@
 # Installation
 
+<!-- Updated: 2026-10-28 -->
+
 searxNcrawl runs as an MCP server, a set of CLI tools and a Python package. Pick the setup that fits; the `search` tool needs at least one [search provider](#search-providers), while crawling works without one.
 
 ## uvx (no clone)
@@ -27,9 +29,12 @@ docker compose up --build
 | `MCP_PORT`                  | `9555`                    | MCP server HTTP port                                          |
 | `LOG_LEVEL`                 | `INFO`                    | MCP server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `PLAYWRIGHT_AUTO_INSTALL`   | `true`                    | Download Playwright's Chromium automatically before the first browser launch if it is missing. Set to `false` where browsers are provisioned separately |
-| `FASTMCP_HTTP_ALLOWED_HOSTS` | (FastMCP secure defaults) | JSON list of trusted HTTP Host headers, for example `["mcp.example.com"]` |
+| `FASTMCP_HTTP_HOST_ORIGIN_PROTECTION` | `false` in locked FastMCP 4.1.3 | Set `true` to enable request-time Host/Origin checks |
+| `FASTMCP_HTTP_ALLOWED_HOSTS` | (FastMCP defaults) | JSON list of trusted HTTP Host headers when protection is enabled, for example `["mcp.example.com"]` |
 
-The MCP server is available at `http://localhost:9555/mcp`.
+- The MCP server is available at `http://localhost:9555/mcp`.
+- The native server configures no caller authentication; protect shared HTTP access with an authenticated TLS proxy. Host and Origin guards are not authentication.
+- Enable header checks explicitly; see [HTTP guard configuration](mcp-server.md#http-host-and-cors-guards). For native Python/uvx, export FastMCP settings before startup; the native `.env` loader runs after FastMCP initializes. Docker Compose injects its `.env` into the container environment.
 
 ## pip
 
@@ -126,10 +131,13 @@ SEARCH_RESULT_FIELDS=title,url,content,publishedDate,providers
 LOG_LEVEL=INFO
 ```
 
-**Config file search order** (CLI tools only):
+**Config file search order** (CLI and native MCP server):
 
 1. `./.env` — current directory
 2. `~/.config/searxncrawl/.env` — user config
 
-If no `.env` exists, `.env.example` is auto-copied to the user config path.
+- Only the first existing file is loaded; the files are not merged.
+- Existing process environment values take precedence over `.env` values.
+- If neither file exists and the package root contains `.env.example`, it is copied to the user config path and loaded.
+- Direct Python API imports do not load these files automatically.
 

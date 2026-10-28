@@ -108,6 +108,9 @@ code --add-mcp '{"name":"searxncrawl","command":"uvx","args":["searxncrawl"],"en
 
 The first crawl downloads Playwright's Chromium once (about 550 MB). For Docker, HTTP transport and other setups see [Installation](docs/usage/installation.md) and [MCP server](docs/usage/mcp-server.md).
 
+- **Claude Desktop bundle:** download `searxncrawl-<version>.mcpb` from [GitHub Releases](https://github.com/DasDigitaleMomentum/searxNcrawl/releases/latest) and open it in Claude Desktop.
+- **Smithery users:** use the direct installation above or the native bundle; see the [Smithery transition](docs/registry.md#smithery-transition).
+
 ### Ask your agent
 
 ```text

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Document direct PyPI/MCPB installation and retire the unavailable Smithery publishing step following Smithery's API/CLI shutdown announcement.
+
 ## [0.33.0] - 2026-10-28
 
 ### Added

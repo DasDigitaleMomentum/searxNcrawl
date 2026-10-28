@@ -66,12 +66,39 @@ jobs:
           SEARXNCRAWL_REQUIRE_BROWSER_TESTS: "1"
         run: uv run --locked --extra dev pytest -p no:cacheprovider
 
+  arcade:
+    name: arcade adapter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: deploy/arcade
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: deploy/arcade/uv.lock
+
+      - name: Install adapter dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Check adapter tools and credential isolation
+        run: uv run --locked --extra dev pytest -p no:cacheprovider
+
   ci:
     # Single required status check, enforced by the org ruleset
     # "public-default-branch". Add every job of this workflow to `needs`.
     name: ci
     if: always()
-    needs: [lint, test]
+    needs: [lint, test, arcade]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

@@ -242,6 +242,7 @@ Ideas and votes are welcome in [Discussions](https://github.com/DasDigitaleMomen
 | [Output formats](docs/usage/output-formats.md) | Markdown and JSON structure, `CrawledDocument` |
 | [Session capture](docs/usage/session-capture.md) | Authenticated crawling with a saved browser session |
 | [MCP Registry](docs/registry.md) | `server.json` and the publish steps |
+| [Arcade adapter](deploy/arcade/README.md) | Optional worker, secret configuration and current Cloud hosting limitation |
 | [Architecture](docs/overview.md) | Modules and features for contributors |
 
 ## Contributing

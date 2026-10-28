@@ -53,6 +53,8 @@ SEARXNG_URL=http://your-searxng:8888 uvx searxncrawl
 
 ## Quick start
 
+Connect your MCP client directly to searxNcrawl over STDIO or its HTTP endpoint.
+
 You need [uv](https://docs.astral.sh/uv/) and, for the `search` tool, at least one search provider: a SearXNG instance with JSON output enabled and/or a You.com API key (`YDC_API_KEY`). No SearXNG yet? [Start one with Docker](docs/usage/installation.md#run-searxng-locally). Crawling works without either.
 
 ### Add it to your agent
@@ -242,7 +244,7 @@ Ideas and votes are welcome in [Discussions](https://github.com/DasDigitaleMomen
 | [Output formats](docs/usage/output-formats.md) | Markdown and JSON structure, `CrawledDocument` |
 | [Session capture](docs/usage/session-capture.md) | Authenticated crawling with a saved browser session |
 | [MCP Registry](docs/registry.md) | `server.json` and the publish steps |
-| [Arcade adapter](deploy/arcade/README.md) | Optional worker, secret configuration and current Cloud hosting limitation |
+| [Arcade adapter (optional)](deploy/arcade/README.md) | Shared authentication and routing through Arcade; separate deployment |
 | [Architecture](docs/overview.md) | Modules and features for contributors |
 
 ## Contributing

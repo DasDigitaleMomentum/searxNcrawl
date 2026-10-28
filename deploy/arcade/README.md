@@ -1,4 +1,8 @@
-# Arcade worker adapter
+# Optional Arcade worker adapter
+
+- Standard installations use the [native MCP server](../../docs/usage/mcp-server.md) directly over STDIO or HTTP.
+- Use this separate adapter when you need Arcade's shared authentication and gateway across multiple MCP servers.
+- The adapter is installed and deployed separately; it is not part of the standard setup or release requirements.
 
 - Uses the published `searxncrawl==0.33.0` package; does not change the package's MCP or CLI entrypoints.
 - Exposes `Searxncrawl_Crawl`, `Searxncrawl_CrawlSite` and `Searxncrawl_Search` through Arcade's `MCPApp`.

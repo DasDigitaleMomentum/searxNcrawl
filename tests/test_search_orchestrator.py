@@ -154,6 +154,83 @@ def _mock_providers(
 # --- Provider configuration and selection -----------------------------------
 
 
+@pytest.mark.parametrize("raw", [
+    "not-json-secret", '["secret"]', '{"X-Key": 123}',
+    '{"X-Key": "secret\\nvalue"}', '{"X-Key": "secret\\u007f"}',
+    '{"Bad Header": "secret"}', '{"X-Key\\n": "secret"}',
+    '{"X-Key": "@relative-secret"}', '{"X-Key": "secret\\u00e4"}',
+])
+async def test_invalid_extra_headers_disable_searxng_without_request_or_secret(
+    monkeypatch, caplog, raw,
+) -> None:
+    monkeypatch.setenv("SEARXNG_URL", "https://searx.test")
+    monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", raw)
+    recorder = _install(monkeypatch)
+
+    with caplog.at_level(logging.WARNING):
+        payload = json.loads(await mcp_server.search(query="q"))
+
+    assert recorder.calls == []
+    assert "No valid search provider" in payload["error"]
+    assert "SEARXNG_EXTRA_HEADERS" in caplog.text
+    assert "secret" not in caplog.text + json.dumps(payload)
+
+
+@pytest.mark.parametrize("contents", [None, b"secret\nvalue", b"secret\xff"])
+async def test_invalid_header_file_keeps_youcom_available(
+    monkeypatch, tmp_path, caplog, contents,
+) -> None:
+    secret = tmp_path / "secret-file"
+    if contents is not None:
+        secret.write_bytes(contents)
+    monkeypatch.setenv("SEARXNG_URL", "https://searx.test")
+    monkeypatch.setenv("YDC_API_KEY", "sk-test")
+    monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", json.dumps({"X-Key": f"@{secret}"}))
+    recorder = _install(monkeypatch, _response(json={"results": {"web": _web(1)}}))
+
+    with caplog.at_level(logging.WARNING):
+        results = await orchestrator.search("q")
+
+    assert len(results) == 1
+    assert [c["url"] for c in recorder.calls] == [orchestrator.YOUCOM_URL]
+    assert "secret" not in caplog.text
+    assert "secret" not in repr(orchestrator._resolve_provider_config())
+
+
+@pytest.mark.parametrize("entrypoint", ["mcp", "cli"])
+async def test_extra_headers_reach_searxng_only_with_required_json_headers(
+    monkeypatch, tmp_path, entrypoint,
+) -> None:
+    secret = tmp_path / "secret"
+    secret.write_text("header-secret\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SEARXNG_URL", "https://searx.test")
+    monkeypatch.setenv("YDC_API_KEY", "sk-test")
+    monkeypatch.setenv("SEARXNG_EXTRA_HEADERS", json.dumps({
+        "CF-Access-Client-Secret": f"@{secret}" if entrypoint == "mcp" else "@~/secret",
+        "User-Agent": "custom-agent",
+        "accept": "text/html", "CONTENT-TYPE": "text/plain",
+    }))
+    recorder = _install(monkeypatch, route=lambda url: _response(
+        json={"results": []} if "searx.test" in url else {"results": {"web": []}}
+    ))
+
+    if entrypoint == "mcp":
+        assert "error" not in json.loads(await mcp_server.search(query="q"))
+    else:
+        assert await cli._run_search_async(cli._parse_search_args(["q"])) == 0
+
+    searx = next(c for c in recorder.calls if "searx.test" in c["url"])
+    youcom = next(c for c in recorder.calls if "ydc-index.io" in c["url"])
+    headers = httpx.Headers(searx["headers"])
+    assert headers["CF-Access-Client-Secret"] == "header-secret"
+    assert headers["User-Agent"] == "custom-agent"
+    assert headers.get_list("Accept") == ["application/json"]
+    assert headers.get_list("Content-Type") == ["application/json"]
+    assert "CF-Access-Client-Secret" not in httpx.Headers(youcom["headers"])
+    assert "header-secret" not in repr(orchestrator._resolve_provider_config())
+
+
 def test_provider_configuration_and_selection(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SEARXNG_URL", "https://s.example/")
     monkeypatch.setenv("YDC_API_KEY", " key \n")

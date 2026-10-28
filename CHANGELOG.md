@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `SEARXNG_EXTRA_HEADERS` for CLI/MCP search, including absolute or `~/` secret-file references. Invalid headers disable SearXNG without exposing values; You.com remains available.
 - Search with page content in one call: MCP `search(..., include_content=true)` and CLI `search --include-content` crawl every result page and add its Markdown as `markdown`, or `crawl_error` when a page fails. The search results are returned either way.
 
 ### Fixed

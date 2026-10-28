@@ -101,8 +101,22 @@ Check it with `curl "http://localhost:8888/search?q=test&format=json"`. Which en
 | `SEARXNG_URL`          | (none)                                         | SearXNG instance URL, e.g. `http://localhost:8888`; enables SearXNG                                          |
 | `SEARXNG_USERNAME`     | (none)                                         | Optional basic auth user (set both or neither)                                                               |
 | `SEARXNG_PASSWORD`     | (none)                                         | Optional basic auth pass (set both or neither)                                                               |
+| `SEARXNG_EXTRA_HEADERS`| (none)                                         | JSON object of extra SearXNG headers; see Cloudflare Access below. |
 | `YDC_API_KEY`          | (none)                                         | You.com API key; enables You.com (queries go to You.com, US)                                                 |
 | `SEARCH_RESULT_FIELDS` | `title,url,content,publishedDate,providers`    | Comma-separated result fields. Unset = all fields. Available: title, url, content, publishedDate, providers  |
+
+**SearXNG behind Cloudflare Access:**
+
+- Set extra headers for CLI and MCP search; they are never sent to You.com.
+- Header names must be HTTP tokens; values must be ASCII strings without control characters.
+- Values starting with `@` load UTF-8 files using absolute or `~/` paths. Surrounding file whitespace is stripped; relative paths are rejected.
+- Invalid JSON, invalid headers or unreadable files disable SearXNG with a value-free warning. A configured You.com provider remains available.
+- `Accept` and `Content-Type` remain `application/json`, regardless of header-name casing.
+- Set `User-Agent` if your Cloudflare policy rejects the default Python client.
+
+```bash
+SEARXNG_EXTRA_HEADERS={"User-Agent":"searxncrawl","CF-Access-Client-Id":"@~/.config/searxncrawl/cf_id","CF-Access-Client-Secret":"@~/.config/searxncrawl/cf_secret"}
+```
 
 Example `.env`:
 ```bash

@@ -56,6 +56,34 @@ gh release upload v<version> searxncrawl-<version>.mcpb
 
 The release workflow fails if `mcpb/manifest.json` or the pin in `mcpb/pyproject.toml` does not match `pyproject.toml`.
 
+## Glama releases
+
+- [Public listing](https://glama.ai/mcp/servers/DasDigitaleMomentum/searxNcrawl): latest Glama build **0.33.1**; Python package **0.33.0**. Both were published **28 October 2026**; automatic releases are enabled.
+- Glama build numbers and Python package releases are independent; do not change package release metadata to match a Glama build number.
+- The listing builds the repository source; verify the selected commit and package version after each sync. A documentation-only main update can retain the same runtime release.
+
+### Build configuration
+
+| Setting | Value |
+| --- | --- |
+| Base image | `debian:trixie-slim` |
+| Node.js | `24` |
+| Python | `3.14` |
+| Build step 1 | `uv sync --locked` |
+| Build step 2 | `uv run --locked playwright install --with-deps chromium` |
+| Start command | `mcp-proxy -- uv run --no-sync crawl-mcp` |
+| Placeholder | `MCP_PORT=9555` only |
+
+- `SEARXNG_URL` is optional, without a localhost default; set it only for a reachable SearXNG instance.
+- Mark `SEARXNG_PASSWORD`, `SEARXNG_EXTRA_HEADERS` and `YDC_API_KEY` as secrets. Crawling does not require a search provider.
+
+### Repeatable release check
+
+1. Sync the intended GitHub `main` source in Glama; verify its commit, target package version and automatic-release setting.
+2. Confirm the build configuration above; wait for dependency installation, Chromium installation and the complete build to succeed.
+3. Verify the latest public Glama build and its underlying package version independently; a successful build alone does not prove publication.
+4. Check the public tool schemas: `search`, `crawl` and `crawl_site`; `search` includes boolean `include_content`. Run configured-provider search and browser-crawl checks against that release before accepting those runtime paths.
+
 ## Smithery transition
 
 - Smithery's [official transition notice](https://www.smithery.ai/future) schedules API, account/API key, CLI/SDK and proxy shutdown for **31 October 2026**.

@@ -26,6 +26,7 @@ searxNcrawl is an MCP server, CLI and Python package for web search through Sear
 | `docs/modules/`, `docs/features/` | Architecture notes per module and feature |
 | `server.json` | MCP Registry metadata |
 | `mcpb/` | Claude Desktop MCPB source and legacy Smithery compatibility builder |
+| `deploy/arcade/` | Optional Arcade adapter with separate dependencies and container; standard installations use the native MCP server |
 
 ## Commands
 
@@ -46,6 +47,7 @@ uv run python -m crawler.mcp_server         # MCP server over STDIO
 - **Commits and PRs.** English, [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:` …). PRs are squash-merged into `main` and need one approval.
 - **Docs follow code.** When a tool parameter, default or environment variable changes, update `docs/usage/` and, if affected, the README.
 - **No invented claims.** README and docs describe only what is merged. Mark planned work as planned.
+- **Default integration.** Standard installations connect directly to the native MCP server over STDIO or HTTP. Arcade is optional and is not a runtime or release prerequisite.
 
 ## Releases
 

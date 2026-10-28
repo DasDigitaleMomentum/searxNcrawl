@@ -1,0 +1,25 @@
+[project]
+name = "searxncrawl-arcade"
+version = "0.33.0"
+requires-python = ">=3.12"
+dependencies = [
+    "searxncrawl==0.33.0",
+    "arcade-mcp-server==1.32.1",
+    "fastmcp==4.1.4",
+    "docstring-parser==0.18.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["server"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

@@ -24,6 +24,7 @@ Environment Variables:
     SEARXNG_URL: SearXNG instance URL; enables SearXNG (no default)
     SEARXNG_USERNAME: Optional basic auth username (set both or neither)
     SEARXNG_PASSWORD: Optional basic auth password (set both or neither)
+    SEARXNG_EXTRA_HEADERS: JSON object of extra SearXNG headers; supports @/absolute or @~/ secret files
     YDC_API_KEY: You.com API key; enables You.com (queries go to You.com, US)
 """
 
@@ -551,6 +552,7 @@ Environment Variables:
     SEARXNG_URL       SearXNG instance URL; enables SearXNG (no default)
     SEARXNG_USERNAME  Optional basic auth username (set both or neither)
     SEARXNG_PASSWORD  Optional basic auth password (set both or neither)
+    SEARXNG_EXTRA_HEADERS  JSON extra SearXNG headers; supports @/absolute or @~/ secret files
     YDC_API_KEY       You.com API key; enables You.com (queries go to You.com, US)
 
 Examples:

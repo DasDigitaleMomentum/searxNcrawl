@@ -1,14 +1,16 @@
 ---
 type: documentation
 entity: project-overview
-version: 1.0
+version: 1.1
 ---
 
 # searxNcrawl
 
 ## Purpose
 
-searxNcrawl is a Python package that provides web crawling and multi-provider web search (SearXNG and/or You.com, queried in parallel and merged) through both a CLI and an MCP server, returning model-friendly Markdown or JSON for downstream agent/tool workflows (`README.md:3`, `README.md:11`, `README.md:19`, `README.md:29`).
+- Python package, CLI and MCP server for web crawling and parallel SearXNG/You.com search.
+- Results return as Markdown or JSON; optional search-page crawling includes page content in the same call.
+- Protected SearXNG search supports Basic Auth and validated extra headers with secret-file references.
 
 ## Architecture
 
@@ -17,7 +19,7 @@ The system is implemented as one package (`crawler/`) with clear layers:
 - **Public API/orchestration**: `crawler/__init__.py`
 - **Crawler configuration**: `crawler/config.py`
 - **Data model + transformation**: `crawler/document.py`, `crawler/references.py`, `crawler/builder.py`
-- **Site BFS crawling**: `crawler/site.py`
+- **Site DFS crawling**: `crawler/site.py`
 - **Search orchestration**: `crawler/search_orchestrator.py` (provider selection, SearXNG + You.com calls, merge, serializer)
 - **Interfaces**: `crawler/cli.py` and `crawler/mcp_server.py`
 
@@ -76,8 +78,8 @@ CLI (crawl/capture/search)  MCP client (stdio/http)
 | Feature | Description | Documentation |
 |---------|-------------|---------------|
 | crawling-workflows | Crawl one or many URLs with markdown/json output and concurrency controls. | [Detail](features/crawling-workflows.md) |
-| site-crawling-bfs | Crawl complete sites from a seed URL via BFS strategy. | [Detail](features/site-crawling-bfs.md) |
-| search-with-searxng | Query the configured providers (SearXNG, You.com) in parallel; merged, attributed results. | [Detail](features/search-with-searxng.md) |
+| site-crawling-bfs | Crawl sites from a seed URL via DFS; documentation path retained for link stability. | [Detail](features/site-crawling-bfs.md) |
+| search-with-searxng | Parallel, attributed SearXNG/You.com results; optional page content and protected-SearXNG headers. | [Detail](features/search-with-searxng.md) |
 | mcp-tools-and-transports | Expose crawl/search tools over MCP stdio or HTTP. | [Detail](features/mcp-tools-and-transports.md) |
 | cli-commands-and-output | CLI argument parsing, env loading, and output materialization across markdown, JSON, link-stripped, and links-only modes. | [Detail](features/cli-commands-and-output.md) |
 
@@ -87,7 +89,7 @@ CLI (crawl/capture/search)  MCP client (stdio/http)
 
 1. Create a venv and install editable package (`README.md:35`, `README.md:39`).
 2. Install Playwright Chromium (`README.md:42`).
-3. Configure at least one search provider via `.env`/env vars: `SEARXNG_URL` (optional credentials) and/or `YDC_API_KEY` (`README.md` "Search providers", `.env.example`).
+3. Configure `SEARXNG_URL` (optional Basic Auth and `SEARXNG_EXTRA_HEADERS`) and/or `YDC_API_KEY` through `.env` or process environment. See [installation](usage/installation.md).
 
 ### Build & Run
 

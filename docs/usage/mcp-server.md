@@ -57,6 +57,13 @@ docker compose up --build
 
 The first crawl downloads Playwright's Chromium once (about 550 MB on disk); later starts reuse it. On Linux hosts without the browser's system libraries, run `uvx --from searxncrawl playwright install --with-deps chromium` once.
 
+**Protected SearXNG instances:**
+
+- Add `SEARXNG_EXTRA_HEADERS` to the MCP process environment or shared `.env`; `setup` does not prompt for extra headers.
+- Use a JSON object of ASCII string values; `@/absolute/path` or `@~/path` values load UTF-8 secret files on each search call.
+- Headers are SearXNG-only. Invalid configuration disables SearXNG with a value-free warning; You.com remains available when configured.
+- `Accept` and `Content-Type` stay `application/json`. See [the complete header rules and Cloudflare Access example](installation.md#searxng-behind-cloudflare-access).
+
 **Python with venv:**
 
 ```json

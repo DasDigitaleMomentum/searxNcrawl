@@ -8,12 +8,12 @@
     "url": "https://github.com/DasDigitaleMomentum/searxNcrawl",
     "source": "github"
   },
-  "version": "0.32.0",
+  "version": "0.33.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "searxncrawl",
-      "version": "0.32.0",
+      "version": "0.33.0",
       "transport": {
         "type": "stdio"
       },
@@ -35,6 +35,13 @@
         {
           "name": "SEARXNG_PASSWORD",
           "description": "Optional basic auth password for SearXNG (set both or neither)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SEARXNG_EXTRA_HEADERS",
+          "description": "JSON object of SearXNG-only ASCII headers; values may reference @/absolute or @~/ secret files; invalid values disable SearXNG",
           "isRequired": false,
           "format": "string",
           "isSecret": true

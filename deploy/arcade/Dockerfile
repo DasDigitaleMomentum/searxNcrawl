@@ -16,9 +16,11 @@ COPY pyproject.toml uv.lock server.py /app/
 
 RUN uv sync --locked --no-dev \
     && uv run --no-sync playwright install --with-deps chromium \
+    && apt-get install -y --no-install-recommends tini \
     && uv cache clean \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 10001 --create-home worker
 
 USER worker
+ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 CMD ["python", "server.py"]

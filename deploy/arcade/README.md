@@ -31,11 +31,12 @@ uv run --locked --extra dev pytest
 ```bash
 cd deploy/arcade
 docker build --tag searxncrawl-arcade:0.33.0 .
-docker run --rm -i --network none --entrypoint python searxncrawl-arcade:0.33.0 - < tests/container_smoke.py
+docker run --rm -i --network none searxncrawl-arcade:0.33.0 python - --arcade < ../../tests/container_smoke.py
 ```
 
 - Debian-based Python 3.12 image, locked dependencies and preinstalled Chromium; runs as a non-root user.
 - The build context allows only the Dockerfile, package metadata, lockfile and adapter source. Credentials and working files are excluded.
+- Tini runs as PID 1 to reap orphaned Chromium children and forward shutdown signals; keep the image entrypoint when overriding commands. Custom entrypoints require `--init` (Compose `init: true`, Podman Quadlet `RunInit=true`).
 - Starts over STDIO by default. For local MCP clients, use `docker run --rm -i --env SEARXNCRAWL_SEARCH_CONFIG searxncrawl-arcade:0.33.0` with the secret already set in the caller's environment.
 - The offline smoke test uses real Chromium against a local JavaScript page and a local SearXNG protocol fixture, including `search(include_content=True)`; it does not establish live-provider acceptance.
 - Building the image does not deploy or register it with Arcade. For hybrid HTTP operation, expose only the authenticated `/worker/` routes through the TLS proxy; the SDK's separate `/mcp` route needs its own resource-server authentication and must not be published unprotected.

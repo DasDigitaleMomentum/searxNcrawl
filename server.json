@@ -8,12 +8,12 @@
     "url": "https://github.com/DasDigitaleMomentum/searxNcrawl",
     "source": "github"
   },
-  "version": "0.33.0",
+  "version": "0.33.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "searxncrawl",
-      "version": "0.33.0",
+      "version": "0.33.1",
       "transport": {
         "type": "stdio"
       },

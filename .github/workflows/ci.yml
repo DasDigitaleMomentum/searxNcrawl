@@ -96,15 +96,31 @@ jobs:
       - name: Build Debian worker with Chromium
         run: docker build --tag searxncrawl-arcade:test .
 
-      - name: Check container tools and browser rendering
-        run: docker run --rm -i --network none --entrypoint python searxncrawl-arcade:test - < tests/container_smoke.py
+      - name: Check container tools, browser rendering and child reaping
+        run: docker run --rm -i --network none searxncrawl-arcade:test python - --arcade < ../../tests/container_smoke.py
+
+  container:
+    name: native container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build native image with Chromium
+        run: docker build --tag searxncrawl:test .
+
+      - name: Check container tools, browser rendering and child reaping
+        run: docker run --rm -i --network none searxncrawl:test python - < tests/container_smoke.py
 
   ci:
     # Single required status check, enforced by the org ruleset
     # "public-default-branch". Add every job of this workflow to `needs`.
     name: ci
     if: always()
-    needs: [lint, test, arcade]
+    needs: [lint, test, arcade, container]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

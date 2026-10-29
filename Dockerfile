@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
+    tini \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -35,4 +36,6 @@ RUN pip install --no-cache-dir -U pip \
     && pip uninstall -y nltk \
     && python -m playwright install --with-deps chromium
 
+# Reap orphaned Chromium children and forward shutdown signals.
+ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 CMD ["python", "-m", "crawler.mcp_server"]

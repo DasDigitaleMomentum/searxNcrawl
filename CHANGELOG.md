@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.1] - 2026-10-29
+
+### Fixed
+- Native and Arcade Docker images now run under Tini to reap orphaned Chromium children and forward shutdown signals. Rebuild existing images; custom containers need `--init`, Compose `init: true` or Quadlet `RunInit=true`. CI checks repeated real-browser MCP calls for zombie processes.
+
 ### Added
 - Optional Arcade worker adapter pinned to the published `searxncrawl==0.33.0` package, with isolated search credentials, native crawl tools and a Debian container with Chromium. Requires a Playwright-compatible host; Arcade Cloud's current musllinux runner cannot install the package.
 

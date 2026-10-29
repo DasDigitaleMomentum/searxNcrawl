@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "searxncrawl",
   "display_name": "searxNcrawl",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "description": "Web search via your own SearXNG and/or You.com, plus clean Markdown crawling with Crawl4AI and Playwright.",
   "long_description": "Web search and clean Markdown crawling for AI agents.\n\n- search: parallel SearXNG/You.com results; include_content also crawls result pages.\n- crawl: one or many pages rendered in Chromium to Markdown or JSON.\n- crawl_site: follow links within depth, page and timeout limits.\n- Private SearXNG: optional basic auth and extra headers, including @/absolute or @~/ secret files.\n- Crawling needs no search provider; Chromium installs automatically on first use.",
   "author": {

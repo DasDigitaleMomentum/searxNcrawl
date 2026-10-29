@@ -1,6 +1,6 @@
 # Installation
 
-<!-- Updated: 2026-10-28 -->
+<!-- Updated: 2026-10-29 -->
 
 searxNcrawl runs as an MCP server, a set of CLI tools and a Python package. Pick the setup that fits; the `search` tool needs at least one [search provider](#search-providers), while crawling works without one.
 
@@ -35,6 +35,21 @@ docker compose up --build
 - The MCP server is available at `http://localhost:9555/mcp`.
 - The native server configures no caller authentication; protect shared HTTP access with an authenticated TLS proxy. Host and Origin guards are not authentication.
 - Enable header checks explicitly; see [HTTP guard configuration](mcp-server.md#http-host-and-cors-guards). For native Python/uvx, export FastMCP settings before startup; the native `.env` loader runs after FastMCP initializes. Docker Compose injects its `.env` into the container environment.
+
+### Container process cleanup
+
+- Both repository Dockerfiles use Tini as PID 1 to reap orphaned Chromium children and forward shutdown signals. Compose inherits this entrypoint; rebuild and recreate existing containers after upgrading.
+- Override the command with `docker run IMAGE python ...`; `--entrypoint` replaces Tini and removes this protection.
+- For custom images or entrypoint overrides, enable the runtime init:
+
+| Runtime | Setting |
+| --- | --- |
+| Docker / Podman CLI | `--init` |
+| Docker Compose | `init: true` under the service |
+| Podman Quadlet | `RunInit=true` in `[Container]` |
+
+- `init: true` is a Compose setting, not a Dockerfile instruction. A Python package upgrade alone does not add an init to custom containers.
+- Without an init, exited browser descendants can accumulate as `<defunct>` processes under PID 1. See [Playwright's Docker guidance](https://playwright.dev/python/docs/docker#recommended-docker-configuration).
 
 ## pip
 

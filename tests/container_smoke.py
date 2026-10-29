@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import threading
+import time
 
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -44,32 +45,53 @@ class Page(BaseHTTPRequestHandler):
         )
 
 
+ARCADE = "--arcade" in sys.argv
+
+
+def zombies():
+    found = []
+    for path in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            stat = path.read_text()
+        except FileNotFoundError:
+            continue
+        # comm can contain spaces and parentheses; state follows the last closing one.
+        if stat.rsplit(")", 1)[1].split()[0] == "Z":
+            found.append(stat.strip())
+    return found
+
+
 async def check(url):
     transport = StdioTransport(
         command=sys.executable,
-        args=["server.py"],
+        args=["server.py"] if ARCADE else ["-m", "crawler.mcp_server"],
         env={
             "SEARXNCRAWL_SEARCH_CONFIG": json.dumps({"SEARXNG_URL": url}),
-            "PLAYWRIGHT_BROWSERS_PATH": os.environ["PLAYWRIGHT_BROWSERS_PATH"],
+            "SEARXNG_URL": url,
+            **({"PLAYWRIGHT_BROWSERS_PATH": os.environ["PLAYWRIGHT_BROWSERS_PATH"]}
+               if "PLAYWRIGHT_BROWSERS_PATH" in os.environ else {}),
             "PLAYWRIGHT_AUTO_INSTALL": "false",
         },
         keep_alive=False,
         log_file=Path(os.devnull),
     )
     async with Client(transport, timeout=90) as client:
-        assert {tool.name for tool in await client.list_tools()} == {
-            "Searxncrawl_Crawl", "Searxncrawl_CrawlSite", "Searxncrawl_Search"
-        }
-        for tool, arguments in (
-            ("Searxncrawl_Crawl", {"urls": [url]}),
-            ("Searxncrawl_CrawlSite", {"url": url, "max_depth": 0, "max_pages": 1}),
-        ):
+        crawl, site, search = (
+            ("Searxncrawl_Crawl", "Searxncrawl_CrawlSite", "Searxncrawl_Search")
+            if ARCADE else ("crawl", "crawl_site", "search")
+        )
+        assert {tool.name for tool in await client.list_tools()} == {crawl, site, search}
+        for tool, arguments in [
+            *[(crawl, {"urls": [url]}) for _ in range(16)],
+            (crawl, {"urls": [url + "?one", url + "?two"], "concurrency": 2}),
+            (site, {"url": url, "max_depth": 0, "max_pages": 1}),
+        ]:
             result = await client.call_tool(tool, arguments)
             assert not result.is_error
             text = "\n".join(block.text for block in result.content if block.type == "text")
             assert "Rendered by Chromium" in text, text
             print(f"PASS {tool}: real Chromium rendered JavaScript", flush=True)
-        result = await client.call_tool("Searxncrawl_Search", {
+        result = await client.call_tool(search, {
             "query": "browser fixture", "providers": ["searxng"],
             "max_results": 1, "include_content": True,
         })
@@ -77,12 +99,15 @@ async def check(url):
         text = "\n".join(block.text for block in result.content if block.type == "text")
         payload = json.loads(text)
         assert "Rendered by Chromium" in payload["results"][0].get("markdown", ""), text
-        print("PASS Searxncrawl_Search: include_content used bundled Chromium", flush=True)
+        print(f"PASS {search}: include_content used bundled Chromium", flush=True)
 
 
 if __name__ == "__main__":
-    assert os.getuid() != 0, "Container must run as a non-root user"
-    assert version("searxncrawl") == "0.33.0"
+    if ARCADE:
+        assert os.getuid() != 0, "Arcade container must run as a non-root user"
+    print({name: version(name) for name in ("searxncrawl", "crawl4ai", "playwright")}, flush=True)
+    print(f"PID 1: {Path('/proc/1/comm').read_text().strip()}", flush=True)
+    assert not zombies(), "Container must start without zombies"
     assert not Path(".env").exists(), "Credentials must not be copied into the image"
     with ThreadingHTTPServer(("127.0.0.1", 0), Page) as server:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -92,3 +117,10 @@ if __name__ == "__main__":
         finally:
             server.shutdown()
             thread.join()
+
+    deadline = time.monotonic() + 5
+    while zombies() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    remaining = zombies()
+    print(f"Zombies after repeated MCP browser calls: {len(remaining)}", flush=True)
+    assert not remaining, remaining

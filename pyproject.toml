@@ -37,7 +37,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://www.das-digitale-momentum.de/en/open-source/#searxncrawl"
+Homepage = "https://www.searxncrawl.io/"
 Repository = "https://github.com/DasDigitaleMomentum/searxNcrawl"
 Issues = "https://github.com/DasDigitaleMomentum/searxNcrawl/issues"
 Changelog = "https://github.com/DasDigitaleMomentum/searxNcrawl/blob/main/CHANGELOG.md"

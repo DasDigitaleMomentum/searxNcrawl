@@ -1,6 +1,6 @@
 [project]
 name = "searxncrawl-mcpb"
-version = "0.33.1"
+version = "0.33.2"
 description = "MCPB bundle that runs the searxncrawl MCP server"
 requires-python = ">=3.10"
-dependencies = ["searxncrawl==0.33.1"]
+dependencies = ["searxncrawl==0.33.2"]
